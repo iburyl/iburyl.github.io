@@ -13,13 +13,23 @@ table {
    </style>
 </head>
 <body>
+
+<div id="instruction">
+Any options here, then press red-circled link.<br />
+   <img width=600 src="img/first.jpeg" /><br /><br />
+Green-circled options are required, red-circled options should be avoided (parsing do not correctly work with "," and "/n").<br />
+   <img width=600 src="img/second.png" /><br /><br />
+Waiting for archive to be available.<br />
+Download archive, unpack it...<br />
+Provide results CSV file to the form:<br />
+</div>
+
    <form id="myForm">
       <input type="file" id="csvFile" accept=".csv" />
       <br />
-      <input type="submit" value="Submit" />
+      <input type="submit" value="Process" />
       <div id="output"/>
       <table id="table_years"></table>
-      <table id="table_ref"></table>
    </form>
    <script>
       function createTr() {
@@ -34,8 +44,8 @@ table {
             }
             else if( Array.isArray(arguments[i]) )
             {
-                td.setAttribute("rowspan", arguments[i][0]);
-                td.innerHTML = arguments[i][1];
+                td.setAttribute(arguments[i][0], arguments[i][1]);
+                td.innerHTML = arguments[i][2];
             }
             else
             {
@@ -191,7 +201,19 @@ table {
             const speciesYearsMapSorted = new Map([...speciesYearsMap].sort());
 
             {
+                const instruction = document.getElementById("instruction");
+                instruction.innerHTML = '';
                 const table_years = document.getElementById("table_years");
+                table_years.innerHTML = '';
+
+                table_years.appendChild(createTr(
+                            ['rowspan',2,'year'], ['colspan',2,'number of species'], ['colspan',2,'names'], ['rowspan',2,'all years num'],
+                            ['colspan',2,'first observation'],
+                            ['colspan',3,'first research grade if different']));
+
+                table_years.appendChild(createTr(
+                            'cumulative', 'this year', 'common', 'latin',
+                            'ref', 'user', 'year', 'ref', 'user'));
 
                 let cumulative = 0;
                 speciesYearsMapSorted.forEach( (value, key) =>
@@ -200,11 +222,9 @@ table {
                     const cards = value;
                     cumulative += cards.length;
 
-                    let text = '';
-                    let table = document.createElement("table");
-
                     let first = true;
 
+                    
                     cards.forEach( (card) => 
                     {
 
@@ -224,16 +244,14 @@ table {
 
                         if(first)
                         {
-                            let tr = createTr([cards.length,key], [cards.length,cumulative], [cards.length,cards.length],
-                                name, lat_name, fst_href, fst_user, total, rsch_year, rsch_href, rsch_user);
-                                //card.name, ' (' + card.lat_name + ') ', `<a href='${url}'>link</a>`, card.first_observed_user_id, card.total_observed, card.first_observed_id==card.first_observed_research_id);
+                            let tr = createTr(['rowspan',cards.length,key], ['rowspan',cards.length,cumulative], ['rowspan',cards.length,cards.length],
+                                name, lat_name, total, fst_href, fst_user, rsch_year, rsch_href, rsch_user);
                             table_years.appendChild(tr);
                         }
                         else
                         {
                             let tr = createTr(
-                                //card.name, ' (' + card.lat_name + ') ', `<a href='${url}'>link</a>`, card.first_observed_user_id, card.total_observed, card.first_observed_id==card.first_observed_research_id);
-                                name, lat_name, fst_href, fst_user, total, rsch_year, rsch_href, rsch_user);
+                                name, lat_name, total, fst_href, fst_user, rsch_year, rsch_href, rsch_user);
                             table_years.appendChild(tr);
                         }
                         
