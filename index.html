@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html>
+<head>
+   <meta charset="UTF-8">
+
+   <style>
+        table, th, td {
+          border: 1px solid;
+        }
+table {
+  border-collapse: collapse;
+}
+   </style>
+</head>
+<body>
+   <form id="myForm">
+      <input type="file" id="csvFile" accept=".csv" />
+      <br />
+      <input type="submit" value="Submit" />
+      <div id="output"/>
+      <table id="table_years"></table>
+      <table id="table_ref"></table>
+   </form>
+   <script>
+      function createTr() {
+        let tr = document.createElement("tr");
+
+        for (var i = 0; i < arguments.length; i++) {
+            let td = document.createElement("td");
+            
+            if( arguments[i] instanceof HTMLElement )
+            {
+                td.appendChild( arguments[i] );
+            }
+            else if( Array.isArray(arguments[i]) )
+            {
+                td.setAttribute("rowspan", arguments[i][0]);
+                td.innerHTML = arguments[i][1];
+            }
+            else
+            {
+                td.innerHTML = arguments[i];
+            }
+            
+            tr.appendChild( td );
+        }
+
+        return tr;
+      }
+      
+      const myForm = document.getElementById("myForm");
+      const csvFile = document.getElementById("csvFile");
+      myForm.addEventListener("submit", function (e) {
+         e.preventDefault();
+         const input = csvFile.files[0];
+         const reader = new FileReader();
+         reader.onload = function (e) {
+            const string = e.target.result;
+
+
+            var lines = string.split("\n");
+
+            var headers = lines[0].split(",");
+            lines.shift();
+
+            const output = document.getElementById("output");
+
+            const knownHeaderName = [ "user_login",  "url", "time_observed_at", "scientific_name", "common_name", "quality_grade", "observed_on", "id"];
+            let   knownHeaderIdx  = [];
+            
+            for (let i = 0; i < headers.length; i++) {
+                for (let j = 0; j < knownHeaderName.length; j++) {
+                    if(headers[i] == knownHeaderName[j]) {
+                        knownHeaderIdx[j] = i;
+                    }
+                }
+            }
+            const i_user_login   =knownHeaderIdx[0];
+            const i_url          =knownHeaderIdx[1];
+            const i_time_observed=knownHeaderIdx[2];
+            const i_lat_name     =knownHeaderIdx[3];
+            const i_lang_name    =knownHeaderIdx[4];
+            const i_quality_grade=knownHeaderIdx[5];
+            const i_observed_on  =knownHeaderIdx[6];
+            const i_id           =knownHeaderIdx[7];
+            console.log(knownHeaderIdx);
+
+            const speciesMap = new Map();
+
+
+            for(let i = 0; i < lines.length; i++) {
+                /// Beware: `description` can be multiline and may contain ","
+                /// Beware: `tag_list` may contain ","
+
+                const values = lines[i].split(",");
+
+                let lat_name = values[i_lat_name];
+                let observed_time = new Date(values[i_observed_on]);
+
+                if(values.length == 1)
+                {
+                    console.log("last line");
+                    break;
+                }
+                if(values.length != headers.length)
+                {
+                    console.log(values);
+                    console.log("broken line");
+                    continue;
+                }
+                
+                let lat_name_split = lat_name.split(" ");
+                
+                let is_identified = (lat_name_split.length >= 2);
+                if(!is_identified) continue;
+
+                if(lat_name_split.length > 2)
+                {
+                    lat_name = lat_name_split[0] + ' ' + lat_name_split[1]; // remove subspecies
+                }
+
+                let is_research = (values[i_quality_grade] == "research");
+
+                if( !speciesMap.has(lat_name) )
+                {
+                    let card = {
+                        lat_name: lat_name,
+                        name: values[i_lang_name],
+                        total_observed: 1,
+                        total_observed_research: (is_research)?1:0,
+                        first_observed_user_id: values[i_user_login],
+                        first_observed_time: observed_time,
+                        first_observed_url: values[i_url],
+                        first_observed_id: values[i_id],
+                    };
+                    if( is_research )
+                    {
+                        card.first_observed_research_user_id = values[i_user_login];
+                        card.first_observed_research_time = observed_time;
+                        card.first_observed_research_url = values[i_url];
+                        card.first_observed_research_id = values[i_id];
+                    }
+
+                    speciesMap.set(lat_name, card);
+                }
+                else
+                {
+                    let card = speciesMap.get(lat_name);
+                    card.total_observed += 1;
+                    card.total_observed_research += (is_research)?1:0;
+
+                    if( observed_time < card.first_observed_time )
+                    {
+                        card.first_observed_user_id = values[i_user_login];
+                        card.first_observed_time = observed_time;
+                        card.first_observed_url = values[i_url];
+                        card.first_observed_id = values[i_id];
+                    }
+
+                    if( is_research )
+                    {
+                        if( typeof card.first_observed_research_time === "undefined" || observed_time < card.first_observed_research_time )
+                        {
+                            card.first_observed_research_user_id = values[i_user_login];
+                            card.first_observed_research_time = observed_time;
+                            card.first_observed_research_url = values[i_url];
+                            card.first_observed_research_id = values[i_id];
+                        }
+
+                    }
+                }
+            }
+
+            console.log('Total species: ' + speciesMap.size);
+
+            const speciesYearsMap = new Map();
+
+            speciesMap.forEach( (value, key) =>
+            {
+                const card = value;
+                let year = card.first_observed_time.getFullYear();
+
+                if( !speciesYearsMap.has(year) )
+                {
+                    speciesYearsMap.set(year, []);
+                }
+
+                speciesYearsMap.get(year).push(value);
+            } );
+
+            const speciesYearsMapSorted = new Map([...speciesYearsMap].sort());
+
+            {
+                const table_years = document.getElementById("table_years");
+
+                let cumulative = 0;
+                speciesYearsMapSorted.forEach( (value, key) =>
+                {
+
+                    const cards = value;
+                    cumulative += cards.length;
+
+                    let text = '';
+                    let table = document.createElement("table");
+
+                    let first = true;
+
+                    cards.forEach( (card) => 
+                    {
+
+                        let name = card.name;
+                        let lat_name = '(' + card.lat_name + ')';
+                        let fst_url  = card.first_observed_url;
+                        let fst_href = `<a href='${fst_url}'>link</a>`;
+                        let fst_user = card.first_observed_user_id;
+                        let total    = card.total_observed;
+
+                        let first_is_research = card.first_observed_id==card.first_observed_research_id;
+                        let has_research = typeof card.first_observed_research_id !== "undefined";
+                        let rsch_url  = (first_is_research)?'':(!has_research)?'':card.first_observed_research_url;
+                        let rsch_href = (first_is_research)?'':(!has_research)?'':`<a href='${rsch_url}'>link</a>`;
+                        let rsch_user = (first_is_research)?'':(!has_research)?'':card.first_observed_research_user_id;
+                        let rsch_year = (first_is_research)?'':(!has_research)?'none':card.first_observed_research_time.getFullYear();
+
+                        if(first)
+                        {
+                            let tr = createTr([cards.length,key], [cards.length,cumulative], [cards.length,cards.length],
+                                name, lat_name, fst_href, fst_user, total, rsch_year, rsch_href, rsch_user);
+                                //card.name, ' (' + card.lat_name + ') ', `<a href='${url}'>link</a>`, card.first_observed_user_id, card.total_observed, card.first_observed_id==card.first_observed_research_id);
+                            table_years.appendChild(tr);
+                        }
+                        else
+                        {
+                            let tr = createTr(
+                                //card.name, ' (' + card.lat_name + ') ', `<a href='${url}'>link</a>`, card.first_observed_user_id, card.total_observed, card.first_observed_id==card.first_observed_research_id);
+                                name, lat_name, fst_href, fst_user, total, rsch_year, rsch_href, rsch_user);
+                            table_years.appendChild(tr);
+                        }
+                        
+                        first = false;
+                    } );
+
+                    //let tr = createTr(key, cards.length, cumulative, text, table);
+                    //table_years.appendChild(tr);
+                } );
+            }
+
+
+         };
+         reader.readAsText(input);
+
+      });
+   </script>
+</body>
+</html>
