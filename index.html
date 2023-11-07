@@ -17,7 +17,7 @@ table {
 <div id="instruction">
 Any options here, then press red-circled link.<br />
    <img width=600 src="img/first.jpeg" /><br /><br />
-Green-circled options are required, red-circled options should be avoided (parsing do not correctly work with "," and "/n").<br />
+Green-circled options are required, red-circled options should be avoided (the issues with those are fixed, but be cautious just in case).<br />
    <img width=600 src="img/second.png" /><br /><br />
 Waiting for archive to be available.<br />
 Download archive, unpack it...<br />
@@ -31,6 +31,97 @@ Provide results CSV file to the form:<br />
       <div id="output"/>
       <table id="table_years"></table>
    </form>
+
+<script type="text/javascript">
+    // Source for this one is: https://www.bennadel.com/blog/1504-ask-ben-parsing-csv-strings-with-javascript-exec-regular-expression-command.htm
+	
+    // This will parse a delimited string into an array of
+	// arrays. The default delimiter is the comma, but this
+	// can be overriden in the second argument.
+	function CSVToArray( strData, strDelimiter ){
+		// Check to see if the delimiter is defined. If not,
+		// then default to comma.
+		strDelimiter = (strDelimiter || ",");
+
+		// Create a regular expression to parse the CSV values.
+		var objPattern = new RegExp(
+			(
+				// Delimiters.
+				"(\\" + strDelimiter + "|\\r?\\n|\\r|^)" +
+
+				// Quoted fields.
+				"(?:\"([^\"]*(?:\"\"[^\"]*)*)\"|" +
+
+				// Standard fields.
+				"([^\"\\" + strDelimiter + "\\r\\n]*))"
+			),
+			"gi"
+			);
+
+
+		// Create an array to hold our data. Give the array
+		// a default empty first row.
+		var arrData = [[]];
+
+		// Create an array to hold our individual pattern
+		// matching groups.
+		var arrMatches = null;
+
+
+		// Keep looping over the regular expression matches
+		// until we can no longer find a match.
+		while (arrMatches = objPattern.exec( strData )){
+
+			// Get the delimiter that was found.
+			var strMatchedDelimiter = arrMatches[ 1 ];
+
+			// Check to see if the given delimiter has a length
+			// (is not the start of string) and if it matches
+			// field delimiter. If id does not, then we know
+			// that this delimiter is a row delimiter.
+			if (
+				strMatchedDelimiter.length &&
+				(strMatchedDelimiter != strDelimiter)
+				){
+
+				// Since we have reached a new row of data,
+				// add an empty row to our data array.
+				arrData.push( [] );
+
+			}
+
+
+			// Now that we have our delimiter out of the way,
+			// let's check to see which kind of value we
+			// captured (quoted or unquoted).
+			if (arrMatches[ 2 ]){
+
+				// We found a quoted value. When we capture
+				// this value, unescape any double quotes.
+				var strMatchedValue = arrMatches[ 2 ].replace(
+					new RegExp( "\"\"", "g" ),
+					"\""
+					);
+
+			} else {
+
+				// We found a non-quoted value.
+				var strMatchedValue = arrMatches[ 3 ];
+
+			}
+
+
+			// Now that we have our value string, let's add
+			// it to the data array.
+			arrData[ arrData.length - 1 ].push( strMatchedValue );
+		}
+
+		// Return the parsed data.
+		return( arrData );
+	}
+
+</script>
+   
    <script>
       function createTr() {
         let tr = document.createElement("tr");
@@ -67,11 +158,10 @@ Provide results CSV file to the form:<br />
          reader.onload = function (e) {
             const string = e.target.result;
 
-
-            var lines = string.split("\n");
-
-            var headers = lines[0].split(",");
-            lines.shift();
+            const CSVarrays = CSVToArray(string);
+            
+            var headers = CSVarrays[0];
+            CSVarrays.shift();
 
             const output = document.getElementById("output");
 
@@ -97,12 +187,10 @@ Provide results CSV file to the form:<br />
 
             const speciesMap = new Map();
 
+            console.log('Total observations: ' + CSVarrays.length);
 
-            for(let i = 0; i < lines.length; i++) {
-                /// Beware: `description` can be multiline and may contain ","
-                /// Beware: `tag_list` may contain ","
-
-                const values = lines[i].split(",");
+            for(let i = 0; i < CSVarrays.length; i++) {
+                const values = CSVarrays[i];
 
                 let lat_name = values[i_lat_name];
                 let observed_time = new Date(values[i_observed_on]);
