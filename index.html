@@ -34,6 +34,7 @@ Provide results CSV file to the form:<br />
 
 <script type="text/javascript">
     // Source for this one is: https://www.bennadel.com/blog/1504-ask-ben-parsing-csv-strings-with-javascript-exec-regular-expression-command.htm
+    // https://stackoverflow.com/questions/1293147/how-to-parse-csv-data
 	
     // This will parse a delimited string into an array of
 	// arrays. The default delimiter is the comma, but this
@@ -212,59 +213,82 @@ Provide results CSV file to the form:<br />
                 let is_identified = (lat_name_split.length >= 2);
                 if(!is_identified) continue;
 
-                if(lat_name_split.length > 2)
+                let is_hybrid = false;
+                if(lat_name_split.length > 2 && lat_name_split[1].length == 1)
                 {
+                    is_hybrid = true;
+                }
+                
+                let is_ssp = false;
+
+                if(lat_name_split.length > 2 && !is_hybrid)
+                {
+                    is_ssp = true;
                     lat_name = lat_name_split[0] + ' ' + lat_name_split[1]; // remove subspecies
                 }
 
                 let is_research = (values[i_quality_grade] == "research");
 
+
+                let obs = {
+                    obs_id: values[i_id],
+                    user_id: values[i_user_login],
+                    time: observed_time,
+                    url: values[i_url],
+                    is_research: is_research,
+                    is_ssp: is_ssp,
+                    lat_name: values[i_lat_name],
+                };
+
+                
+                let card;
+                
                 if( !speciesMap.has(lat_name) )
                 {
-                    let card = {
+                    card = {
                         lat_name: lat_name,
                         name: values[i_lang_name],
-                        total_observed: 1,
-                        total_observed_research: (is_research)?1:0,
-                        first_observed_user_id: values[i_user_login],
-                        first_observed_time: observed_time,
-                        first_observed_url: values[i_url],
-                        first_observed_id: values[i_id],
+                        total_observed: 0,
+                        total_research: 0,
+                        first_observed: obs,
+                        ssps: new Map(),
                     };
-                    if( is_research )
-                    {
-                        card.first_observed_research_user_id = values[i_user_login];
-                        card.first_observed_research_time = observed_time;
-                        card.first_observed_research_url = values[i_url];
-                        card.first_observed_research_id = values[i_id];
-                    }
 
                     speciesMap.set(lat_name, card);
                 }
                 else
                 {
-                    let card = speciesMap.get(lat_name);
-                    card.total_observed += 1;
-                    card.total_observed_research += (is_research)?1:0;
+                    card = speciesMap.get(lat_name);
+                }
 
-                    if( observed_time < card.first_observed_time )
+                card.total_observed += 1;
+                card.total_research += (is_research)?1:0;
+
+                if( observed_time < card.first_observed.time )
+                {
+                    card.first_observed = obs;
+                }
+
+                if( is_research )
+                {
+                    if( typeof card.first_observed_research_time === "undefined" || observed_time < card.first_research.time )
                     {
-                        card.first_observed_user_id = values[i_user_login];
-                        card.first_observed_time = observed_time;
-                        card.first_observed_url = values[i_url];
-                        card.first_observed_id = values[i_id];
+                        card.first_research = obs;
                     }
+                }
 
-                    if( is_research )
+                if( is_ssp )
+                {
+                    obs.lat_name = Array.from(lat_name_split[0])[0] + '.' + Array.from(lat_name_split[1])[0] + '. ' + lat_name_split[2];
+                    if( card.ssps.has(obs.lat_name) )
                     {
-                        if( typeof card.first_observed_research_time === "undefined" || observed_time < card.first_observed_research_time )
-                        {
-                            card.first_observed_research_user_id = values[i_user_login];
-                            card.first_observed_research_time = observed_time;
-                            card.first_observed_research_url = values[i_url];
-                            card.first_observed_research_id = values[i_id];
-                        }
-
+                        num = card.ssps.get(obs.lat_name);
+                        num += 1;
+                        card.ssps.set(obs.lat_name, num);
+                    }
+                    else
+                    {
+                        card.ssps.set(obs.lat_name, 1);
                     }
                 }
             }
@@ -276,7 +300,7 @@ Provide results CSV file to the form:<br />
             speciesMap.forEach( (value, key) =>
             {
                 const card = value;
-                let year = card.first_observed_time.getFullYear();
+                let year = card.first_observed.time.getFullYear();
 
                 if( !speciesYearsMap.has(year) )
                 {
@@ -295,12 +319,12 @@ Provide results CSV file to the form:<br />
                 table_years.innerHTML = '';
 
                 table_years.appendChild(createTr(
-                            ['rowspan',2,'year'], ['colspan',2,'number of species'], ['colspan',2,'names'], ['rowspan',2,'all years num'],
+                            ['rowspan',2,'year'], ['colspan',2,'number of species'], ['colspan',2,'names'], ['colspan',3,'all years'],
                             ['colspan',2,'first observation'],
                             ['colspan',3,'first research grade if different']));
 
                 table_years.appendChild(createTr(
-                            'cumulative', 'this year', 'common', 'latin',
+                            'cumulative', 'this year', 'common', 'latin', 'obs', 'rsch','ssps',
                             'ref', 'user', 'year', 'ref', 'user'));
 
                 let cumulative = 0;
@@ -317,29 +341,39 @@ Provide results CSV file to the form:<br />
                     {
 
                         let name = card.name;
-                        let lat_name = '(' + card.lat_name + ')';
-                        let fst_url  = card.first_observed_url;
+                        let lat_name = card.lat_name;
+                        let fst_url  = card.first_observed.url;
                         let fst_href = `<a href='${fst_url}'>link</a>`;
-                        let fst_user = card.first_observed_user_id;
+                        let fst_user = card.first_observed.user_id;
                         let total    = card.total_observed;
+                        let research = card.total_research;
 
-                        let first_is_research = card.first_observed_id==card.first_observed_research_id;
-                        let has_research = typeof card.first_observed_research_id !== "undefined";
-                        let rsch_url  = (first_is_research)?'':(!has_research)?'':card.first_observed_research_url;
+                        let first_is_research = card.first_observed.is_research;
+                        let has_research = typeof card.first_research !== "undefined";
+                        let rsch_url  = (first_is_research)?'':(!has_research)?'':card.first_research.url;
                         let rsch_href = (first_is_research)?'':(!has_research)?'':`<a href='${rsch_url}'>link</a>`;
-                        let rsch_user = (first_is_research)?'':(!has_research)?'':card.first_observed_research_user_id;
-                        let rsch_year = (first_is_research)?'':(!has_research)?'none':card.first_observed_research_time.getFullYear();
+                        let rsch_user = (first_is_research)?'':(!has_research)?'':card.first_research.user_id;
+                        let rsch_year = (first_is_research)?'':(!has_research)?'none':card.first_research.time.getFullYear();
+
+                        let ssps_text = '';
+                        if( card.ssps.size > 0 )
+                        {
+                            card.ssps.forEach( (num, ssp) => 
+                            {
+                                ssps_text += ssp + ' - ' + num + '<br/>';
+                            });
+                        }
 
                         if(first)
                         {
                             let tr = createTr(['rowspan',cards.length,key], ['rowspan',cards.length,cumulative], ['rowspan',cards.length,cards.length],
-                                name, lat_name, total, fst_href, fst_user, rsch_year, rsch_href, rsch_user);
+                                name, lat_name, total, research, ssps_text, fst_href, fst_user, rsch_year, rsch_href, rsch_user);
                             table_years.appendChild(tr);
                         }
                         else
                         {
                             let tr = createTr(
-                                name, lat_name, total, fst_href, fst_user, rsch_year, rsch_href, rsch_user);
+                                name, lat_name, total, research, ssps_text, fst_href, fst_user, rsch_year, rsch_href, rsch_user);
                             table_years.appendChild(tr);
                         }
                         
