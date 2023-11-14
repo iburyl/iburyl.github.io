@@ -11,13 +11,13 @@ table {
   border-collapse: collapse;
 }
 
-div#output {
+div#detail_div {
   position: fixed;
   top: 0;
   right: 0;
 }
 
-div#output canvas {
+div#detail_div canvas {
   width: 500px;
   height: 300px;
 }
@@ -26,7 +26,15 @@ div#output canvas {
 </head>
 <body>
 
+   <form id="myForm">
+      <input type="file" id="csvFile" accept=".csv" />
+      <br /><br />
+      <input type="submit" value="Get accumulating years" />
+      <br /><br />
+   </form>
+
 <div id="instruction">
+<h3>Instruction:</h3>
 Any options here, then press red-circled link.<br />
    <img width=600 src="img/first.jpeg" /><br /><br />
 Green-circled options are required, red-circled options should be avoided (the issues with those are fixed, but be cautious just in case).<br />
@@ -36,13 +44,7 @@ Download archive, unpack it...<br />
 Provide results CSV file to the form:<br />
 </div>
 
-   <form id="myForm">
-      <input type="file" id="csvFile" accept=".csv" />
-      <br />
-      <input type="submit" value="Process" />
-   </form>
-
-   <div id="output"></div>
+   <div id="detail_div"></div>
    <table id="table_years"></table>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -139,7 +141,7 @@ Provide results CSV file to the form:<br />
 
 <script>
 
-function CSV2SpeciesMap(string)
+function CSV2Observations(string)
 {
     const CSVarrays = CSVToArray(string);
     
@@ -166,7 +168,7 @@ function CSV2SpeciesMap(string)
     const i_id           =knownHeaderIdx[7];
     console.log(knownHeaderIdx);
 
-    const speciesMap = new Map();
+    let observations = [];
 
     console.log('Total observations: ' + CSVarrays.length);
 
@@ -208,25 +210,43 @@ function CSV2SpeciesMap(string)
 
         let is_research = (values[i_quality_grade] == "research");
 
-
         let obs = {
             obs_id: values[i_id],
             user_id: values[i_user_login],
+            name: values[i_lang_name],
+            lat_name_sp: lat_name,
+            lat_name: values[i_lat_name],
             time: observed_time,
             url: values[i_url],
             is_research: is_research,
             is_ssp: is_ssp,
-            lat_name: values[i_lat_name],
+            is_hybrid: is_hybrid,
         };
 
+        if (is_ssp)
+        {
+            obs.lat_name_ssp = Array.from(lat_name_split[0])[0] + '.' + Array.from(lat_name_split[1])[0] + '. ' + lat_name_split[2];
+        }
+
+        observations.push(obs);
+    }
+
+    return observations;
+}
+
+function Observations2SpeciesMap(observations)
+{
+    const speciesMap = new Map();
+
+    observations.forEach((obs) => {
         
         let card;
         
-        if( !speciesMap.has(lat_name) )
+        if( !speciesMap.has(obs.lat_name_sp) )
         {
             card = {
-                lat_name: lat_name,
-                name: values[i_lang_name],
+                lat_name: obs.lat_name_sp,
+                name: obs.name,
                 total_observed: 0,
                 total_research: 0,
                 first_observed: obs,
@@ -235,56 +255,55 @@ function CSV2SpeciesMap(string)
                 observations: new Array(),
             };
 
-            speciesMap.set(lat_name, card);
+            speciesMap.set(obs.lat_name_sp, card);
         }
         else
         {
-            card = speciesMap.get(lat_name);
+            card = speciesMap.get(obs.lat_name_sp);
         }
 
         card.observations.push( obs );
         card.total_observed += 1;
-        card.total_research += (is_research)?1:0;
+        card.total_research += (obs.is_research)?1:0;
 
-        if( !is_hybrid && !is_ssp && card.name != values[i_lang_name] )
+        if( !obs.is_hybrid && !obs.is_ssp && card.name != obs.name )
         {
-            card.name = values[i_lang_name];
+            card.name = obs.name;
         }
 
         
-        if( observed_time < card.first_observed.time )
+        if( obs.time < card.first_observed.time )
         {
             card.first_observed = obs;
         }
 
-        if( observed_time > card.last_observed.time )
+        if( obs.time > card.last_observed.time )
         {
             card.last_observed = obs;
         }
 
-        if( is_research )
+        if( obs.is_research )
         {
-            if( typeof card.first_research === "undefined" || observed_time < card.first_research.time )
+            if( typeof card.first_research === "undefined" || obs.time < card.first_research.time )
             {
                 card.first_research = obs;
             }
         }
 
-        if( is_ssp )
+        if( obs.is_ssp )
         {
-            obs.lat_name = Array.from(lat_name_split[0])[0] + '.' + Array.from(lat_name_split[1])[0] + '. ' + lat_name_split[2];
-            if( card.ssps.has(obs.lat_name) )
+            if( card.ssps.has(obs.lat_name_ssp) )
             {
-                num = card.ssps.get(obs.lat_name);
+                num = card.ssps.get(obs.lat_name_ssp);
                 num += 1;
-                card.ssps.set(obs.lat_name, num);
+                card.ssps.set(obs.lat_name_ssp, num);
             }
             else
             {
-                card.ssps.set(obs.lat_name, 1);
+                card.ssps.set(obs.lat_name_ssp, 1);
             }
         }
-    }
+    } );
 
     console.log('Total species: ' + speciesMap.size);
 
@@ -294,6 +313,47 @@ function CSV2SpeciesMap(string)
 </script>
 
 <script>
+
+function getCardTdSummary( card )
+{
+    let name = card.name;
+    let lat_name = document.createElement("span");
+
+    lat_name.addEventListener("click", (event) => {
+        generateSpeciesDetail( card );
+    });
+
+    lat_name.innerHTML = card.lat_name;
+    let total    = card.total_observed;
+    let research = card.total_research;
+
+    let fst_url  = card.first_observed.url;
+    let fst_href = `<a href='${fst_url}'>link</a>`;
+    let fst_user = card.first_observed.user_id;
+
+    let lst_url  = card.last_observed.url;
+    let lst_href = `<a href='${lst_url}'>link</a>`;
+    let lst_year = card.last_observed.time.getFullYear();
+
+
+    let first_is_research = card.first_observed.is_research;
+    let has_research = typeof card.first_research !== "undefined";
+    let rsch_url  = (first_is_research)?'':(!has_research)?'':card.first_research.url;
+    let rsch_href = (first_is_research)?'':(!has_research)?'':`<a href='${rsch_url}'>link</a>`;
+    let rsch_user = (first_is_research)?'':(!has_research)?'':card.first_research.user_id;
+    let rsch_year = (first_is_research)?'':(!has_research)?'none':card.first_research.time.getFullYear();
+
+    let ssps_text = '';
+    if( card.ssps.size > 0 )
+    {
+        card.ssps.forEach( (num, ssp) => 
+        {
+            ssps_text += ssp + ' - ' + num + '<br/>';
+        });
+    }
+
+    return [name, lat_name, total, research, ssps_text, fst_href, fst_user, rsch_year, rsch_href, rsch_user];
+}
 
 function generateYearsTable( speciesMap )
 {
@@ -321,13 +381,13 @@ function generateYearsTable( speciesMap )
         table_years.innerHTML = '';
 
         table_years.appendChild(createTr(
-                    ['rowspan',2,'year'], ['colspan',2,'number of species'], ['colspan',2,'names'], ['colspan',3,'all years'],
+                   [['rowspan',2,'year'], ['colspan',2,'number of species'], ['colspan',2,'names'], ['colspan',3,'all years'],
                     ['colspan',2,'first observation'],
-                    ['colspan',3,'first research grade if different']));
+                    ['colspan',3,'first research grade if different']]));
 
         table_years.appendChild(createTr(
-                    'cumulative', 'this year', 'common', 'latin (clickable)', 'obs', 'rsch','ssps',
-                    'ref', 'user', 'year', 'ref', 'user'));
+                   ['cumulative', 'this year', 'common', 'latin (clickable)', 'obs', 'rsch','ssps',
+                    'ref', 'user', 'year', 'ref', 'user']));
 
         let cumulative = 0;
         speciesYearsMapSorted.forEach( (value, key) =>
@@ -341,7 +401,7 @@ function generateYearsTable( speciesMap )
             
             cards.forEach( (card) => 
             {
-
+                /*
                 let name = card.name;
                 let lat_name = document.createElement("span");
 
@@ -377,18 +437,18 @@ function generateYearsTable( speciesMap )
                         ssps_text += ssp + ' - ' + num + '<br/>';
                     });
                 }
+                */
 
+                let mainTdFileds = getCardTdSummary( card );//[name, lat_name, total, research, ssps_text, fst_href, fst_user, rsch_year, rsch_href, rsch_user];
+                
                 if(first)
                 {
-                    let tr = createTr(['rowspan',cards.length,key], ['rowspan',cards.length,cumulative], ['rowspan',cards.length,cards.length],
-                        name, lat_name, total, research, ssps_text, fst_href, fst_user, rsch_year, rsch_href, rsch_user);
-                    table_years.appendChild(tr);
+                    let prefixTdFiled = [['rowspan',cards.length, key], ['rowspan', cards.length, cumulative], ['rowspan', cards.length, cards.length]];
+                    table_years.appendChild( createTr( prefixTdFiled.concat(mainTdFileds) ) );
                 }
                 else
                 {
-                    let tr = createTr(
-                        name, lat_name, total, research, ssps_text, fst_href, fst_user, rsch_year, rsch_href, rsch_user);
-                    table_years.appendChild(tr);
+                    table_years.appendChild( createTr( mainTdFileds ) );
                 }
                 
                 first = false;
@@ -423,16 +483,16 @@ function generateSpeciesDetail( card )
 
     yearsMap = new Map([...yearsMap].sort());
 
-    const output = document.getElementById("output");
-    output.innerHTML = card.name + ' (' + card.lat_name + ')';
+    const detail_div = document.getElementById("detail_div");
+    detail_div.innerHTML = card.name + ' (' + card.lat_name + ')';
 
     let monthGraphCanvas = document.createElement("canvas");
-    output.appendChild( monthGraphCanvas );
+    detail_div.appendChild( monthGraphCanvas );
 
-    output.appendChild( document.createElement("br") );
+    detail_div.appendChild( document.createElement("br") );
 
     let yearGraphCanvas = document.createElement("canvas");
-    output.appendChild( yearGraphCanvas );
+    detail_div.appendChild( yearGraphCanvas );
 
     new Chart(monthGraphCanvas, {
         type: 'bar',
@@ -473,52 +533,53 @@ function generateSpeciesDetail( card )
 </script>
 
    
-   <script>
-      function createTr() {
-        let tr = document.createElement("tr");
+<script>
+   function createTr(tdArray) {
+     let tr = document.createElement("tr");
 
-        for (var i = 0; i < arguments.length; i++) {
-            let td = document.createElement("td");
-            
-            if( arguments[i] instanceof HTMLElement )
-            {
-                td.appendChild( arguments[i] );
-            }
-            else if( Array.isArray(arguments[i]) )
-            {
-                td.setAttribute(arguments[i][0], arguments[i][1]);
-                td.innerHTML = arguments[i][2];
-            }
-            else
-            {
-                td.innerHTML = arguments[i];
-            }
-            
-            tr.appendChild( td );
-        }
+     for (var i = 0; i < tdArray.length; i++) {
+         let td = document.createElement("td");
+         
+         if( tdArray[i] instanceof HTMLElement )
+         {
+             td.appendChild( tdArray[i] );
+         }
+         else if( Array.isArray(tdArray[i]) )
+         {
+             td.setAttribute(tdArray[i][0], tdArray[i][1]);
+             td.innerHTML = tdArray[i][2];
+         }
+         else
+         {
+             td.innerHTML = tdArray[i];
+         }
+         
+         tr.appendChild( td );
+     }
 
-        return tr;
-      }
-      
-      const myForm = document.getElementById("myForm");
-      const csvFile = document.getElementById("csvFile");
-      myForm.addEventListener("submit", function (e) {
-         e.preventDefault();
-         const input = csvFile.files[0];
-         const reader = new FileReader();
-         reader.onload = function (e) {
-            const string = e.target.result;
+     return tr;
+   }
+   
+   const myForm = document.getElementById("myForm");
+   const csvFile = document.getElementById("csvFile");
+   myForm.addEventListener("submit", function (e) {
+      console.log(e.submitter.getAttribute("value"));
 
-            const speciesMap = CSV2SpeciesMap(string);
+      e.preventDefault();
+      const input = csvFile.files[0];
+      const reader = new FileReader();
+      reader.onload = function (e) {
+         const string = e.target.result;
 
-            generateYearsTable( speciesMap );
-            
+         const observations = CSV2Observations(string);
+         const speciesMap = Observations2SpeciesMap(observations);
 
+         generateYearsTable( speciesMap );
+         
+      };
+      reader.readAsText(input);
 
-         };
-         reader.readAsText(input);
-
-      });
-   </script>
+   });
+</script>
 </body>
 </html>
