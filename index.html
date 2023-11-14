@@ -27,9 +27,13 @@ div#detail_div canvas {
 <body>
 
    <form id="myForm">
-      <input type="file" id="csvFile" accept=".csv" />
-      <br /><br />
-      <input type="submit" value="Get accumulating years" />
+      Main CSV file:<br />
+      <input type="file" id="csvFile" accept=".csv" /><br />
+      CSV file for comparison report:<br />
+      <input type="file" id="csvFile2" accept=".csv" /><br />
+      <br />
+      <input type="submit" name="main" value="New species by year report" />
+      <input type="submit" name="summary" value="Comparison report" />
       <br /><br />
    </form>
 
@@ -414,6 +418,53 @@ function generateYearsTable( speciesMap )
     }
 }
 
+function generateSpeciesSummaryTable( speciesMap, speciesMap2 )
+{
+    const speciesMapSorted = new Map([...speciesMap].sort((a, b) => {
+        if( a[1].total_observed > b[1].total_observed ) return -1;
+        if( a[1].total_observed < b[1].total_observed ) return  1;
+        return 0;
+    }));
+
+    {
+        const instruction = document.getElementById("instruction");
+        instruction.innerHTML = '';
+        const table_years = document.getElementById("table_years");
+        table_years.innerHTML = '';
+
+        table_years.appendChild(createTr(
+                   [['colspan',2,'names'], ['colspan',3,'all years'],
+                    ['colspan',2,'first observation'],
+                    ['colspan',3,'first research grade if different'],
+                    ['colspan',4,'first observation in compared list']
+                    
+                    ]));
+
+        table_years.appendChild(createTr(
+                   ['common', 'latin (clickable)', 'obs', 'rsch','ssps',
+                    'ref', 'user', 'year', 'ref', 'user', 'all', 'year', 'ref', 'user']));
+
+        
+        speciesMapSorted.forEach( (card, key) =>
+        {
+            let tdFileds = getCardTdSummary( card );
+            
+            if( speciesMap2.has( card.lat_name ) )
+            {
+                let alt_card = speciesMap2.get( card.lat_name );
+                let altFileds = getCardTdSummary( alt_card );
+                tdFileds.push(altFileds[2],alt_card.first_observed.time.getFullYear(),altFileds[5],altFileds[6]);
+            }
+            else
+            {
+                tdFileds.push('','','','');
+            }
+            
+            table_years.appendChild( createTr( tdFileds ) );
+        } );
+    }
+}
+
 </script>
 
 <script>
@@ -519,19 +570,35 @@ function generateSpeciesDetail( card )
    
    const myForm = document.getElementById("myForm");
    const csvFile = document.getElementById("csvFile");
+   const csvFile2 = document.getElementById("csvFile2");
    myForm.addEventListener("submit", function (e) {
-      console.log(e.submitter.getAttribute("value"));
-
       e.preventDefault();
+      const button_name = e.submitter.getAttribute("name");
       const input = csvFile.files[0];
+      const input2 = csvFile2.files[0];
       const reader = new FileReader();
+
       reader.onload = function (e) {
          const string = e.target.result;
-
          const observations = CSV2Observations(string);
          const speciesMap = Observations2SpeciesMap(observations);
 
-         generateYearsTable( speciesMap );
+         if( button_name == "main" )
+         {
+            generateYearsTable( speciesMap );
+         }
+         else if( button_name == "summary" )
+         {
+            const reader = new FileReader();
+            reader.onload = function (e2) {
+               const string2 = e2.target.result;
+               const observations2 = CSV2Observations(string2);
+               const speciesMap2 = Observations2SpeciesMap(observations2);
+        
+               generateSpeciesSummaryTable( speciesMap, speciesMap2 );
+            };
+            reader.readAsText(input2);
+         }
          
       };
       reader.readAsText(input);
