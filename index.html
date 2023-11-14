@@ -390,66 +390,23 @@ function generateYearsTable( speciesMap )
                     'ref', 'user', 'year', 'ref', 'user']));
 
         let cumulative = 0;
-        speciesYearsMapSorted.forEach( (value, key) =>
+        speciesYearsMapSorted.forEach( (cards, year) =>
         {
-
-            const cards = value;
             cumulative += cards.length;
 
             let first = true;
 
-            
             cards.forEach( (card) => 
             {
-                /*
-                let name = card.name;
-                let lat_name = document.createElement("span");
-
-                lat_name.addEventListener("click", (event) => {
-                    generateSpeciesDetail( card );
-                });
-
-                lat_name.innerHTML = card.lat_name;
-                let total    = card.total_observed;
-                let research = card.total_research;
-
-                let fst_url  = card.first_observed.url;
-                let fst_href = `<a href='${fst_url}'>link</a>`;
-                let fst_user = card.first_observed.user_id;
-
-                let lst_url  = card.last_observed.url;
-                let lst_href = `<a href='${lst_url}'>link</a>`;
-                let lst_year = card.last_observed.time.getFullYear();
-
-
-                let first_is_research = card.first_observed.is_research;
-                let has_research = typeof card.first_research !== "undefined";
-                let rsch_url  = (first_is_research)?'':(!has_research)?'':card.first_research.url;
-                let rsch_href = (first_is_research)?'':(!has_research)?'':`<a href='${rsch_url}'>link</a>`;
-                let rsch_user = (first_is_research)?'':(!has_research)?'':card.first_research.user_id;
-                let rsch_year = (first_is_research)?'':(!has_research)?'none':card.first_research.time.getFullYear();
-
-                let ssps_text = '';
-                if( card.ssps.size > 0 )
-                {
-                    card.ssps.forEach( (num, ssp) => 
-                    {
-                        ssps_text += ssp + ' - ' + num + '<br/>';
-                    });
-                }
-                */
-
-                let mainTdFileds = getCardTdSummary( card );//[name, lat_name, total, research, ssps_text, fst_href, fst_user, rsch_year, rsch_href, rsch_user];
+                let tdFileds = getCardTdSummary( card );
                 
                 if(first)
                 {
-                    let prefixTdFiled = [['rowspan',cards.length, key], ['rowspan', cards.length, cumulative], ['rowspan', cards.length, cards.length]];
-                    table_years.appendChild( createTr( prefixTdFiled.concat(mainTdFileds) ) );
+                    let prefixTdFiled = [['rowspan',cards.length, year], ['rowspan', cards.length, cumulative], ['rowspan', cards.length, cards.length]];
+                    tdFileds = prefixTdFiled.concat(tdFileds);
                 }
-                else
-                {
-                    table_years.appendChild( createTr( mainTdFileds ) );
-                }
+
+                table_years.appendChild( createTr( tdFileds ) );
                 
                 first = false;
             } );
