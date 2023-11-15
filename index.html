@@ -192,7 +192,19 @@ function CSV2Observations(string)
         const values = CSVarrays[i];
 
         let lat_name = values[i_lat_name];
-        let observed_time = (values[i_time_observed] != '') ? new Date(values[i_time_observed]) : new Date(values[i_observed_on]);
+        let observed_time;
+        if(values[i_time_observed] != '')
+        {
+            observed_time = new Date(values[i_time_observed]);
+        }
+        else if(values[i_observed_on] != '')
+        {
+            observed_time = new Date(values[i_observed_on]);
+        }
+        else
+        {
+            continue;
+        }
 
         if(values.length == 1)
         {
@@ -467,7 +479,7 @@ function generateSpeciesSummaryTable( speciesMap, compareSpeciesMap )
         table_years.innerHTML = '';
 
         table_years.appendChild(createTr(
-                   [['colspan',2,'names'], ['colspan',4,'all years'],
+                   [['rowspan',2,'#'], ['colspan',2,'names'], ['colspan',4,'all years'],
                     ['colspan',3,'last observation'],
                     ['colspan',4,'last observation in compared list']
                     
@@ -478,9 +490,10 @@ function generateSpeciesSummaryTable( speciesMap, compareSpeciesMap )
                     'year', 'ref', 'user', 'all', 'year', 'ref', 'user']));
 
         
+        let i = 1;
         speciesMapSorted.forEach( (card, key) =>
         {
-            let tdFileds = [...getCardTdSummary( card ), ...getObsTdSummary( card.last_observed )];
+            let tdFileds = [i, ...getCardTdSummary( card ), ...getObsTdSummary( card.last_observed )];
             
             if( compareSpeciesMapSorted.has( card.lat_name ) )
             {
@@ -497,13 +510,18 @@ function generateSpeciesSummaryTable( speciesMap, compareSpeciesMap )
 
                 table_years.appendChild( createTr( tdFileds, 'grey' ) );
             }
+
+            i++;
         } );
 
+        i = 1;
         compareSpeciesMapSorted.forEach( (card, key) =>
         {
-            let tdFileds = [...getCardTdSummary( card ).slice(0,-4), ['colspan',7,'none'],card.total_observed, ...getObsTdSummary( card.last_observed )];
+            let tdFileds = [i, ...getCardTdSummary( card ).slice(0,-4), ['colspan',7,'none'],card.total_observed, ...getObsTdSummary( card.last_observed )];
             
             table_years.appendChild( createTr( tdFileds ) );
+
+            i++;
         } );
     }
 }
