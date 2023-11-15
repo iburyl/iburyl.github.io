@@ -11,6 +11,10 @@ table {
   border-collapse: collapse;
 }
 
+tr.grey {
+  background-color: #f4f4f4;
+}
+
 div#detail_div {
   position: fixed;
   top: 0;
@@ -450,6 +454,12 @@ function generateSpeciesSummaryTable( speciesMap, compareSpeciesMap )
         return 0;
     }));
 
+    const compareSpeciesMapSorted = new Map([...compareSpeciesMap].sort((a, b) => {
+        if( a[1].total_observed > b[1].total_observed ) return -1;
+        if( a[1].total_observed < b[1].total_observed ) return  1;
+        return 0;
+    }));
+
     {
         const instruction = document.getElementById("instruction");
         instruction.innerHTML = '';
@@ -459,7 +469,7 @@ function generateSpeciesSummaryTable( speciesMap, compareSpeciesMap )
         table_years.appendChild(createTr(
                    [['colspan',2,'names'], ['colspan',4,'all years'],
                     ['colspan',3,'last observation'],
-                    ['colspan',4,'first observation in compared list']
+                    ['colspan',4,'last observation in compared list']
                     
                     ]));
 
@@ -472,15 +482,26 @@ function generateSpeciesSummaryTable( speciesMap, compareSpeciesMap )
         {
             let tdFileds = [...getCardTdSummary( card ), ...getObsTdSummary( card.last_observed )];
             
-            if( compareSpeciesMap.has( card.lat_name ) )
+            if( compareSpeciesMapSorted.has( card.lat_name ) )
             {
-                let alt_card = compareSpeciesMap.get( card.lat_name );
-                tdFileds.push(alt_card.total_observed, ...getObsTdSummary( alt_card.first_observed ));
+                let alt_card = compareSpeciesMapSorted.get( card.lat_name );
+                tdFileds.push(alt_card.total_observed, ...getObsTdSummary( alt_card.last_observed ));
+
+                compareSpeciesMapSorted.delete( card.lat_name )
+            
+                table_years.appendChild( createTr( tdFileds ) );
             }
             else
             {
                 tdFileds.push('','','','');
+
+                table_years.appendChild( createTr( tdFileds, 'grey' ) );
             }
+        } );
+
+        compareSpeciesMapSorted.forEach( (card, key) =>
+        {
+            let tdFileds = [...getCardTdSummary( card ).slice(0,-4), ['colspan',7,'none'],card.total_observed, ...getObsTdSummary( card.last_observed )];
             
             table_years.appendChild( createTr( tdFileds ) );
         } );
@@ -565,8 +586,13 @@ function generateSpeciesDetail( card )
    
 <script>
 
-function createTr(tdArray) {
+function createTr(tdArray, trClass) {
   let tr = document.createElement("tr");
+
+  if(typeof trClass !== "undefined")
+  {
+    tr.setAttribute('class', trClass);
+  }
 
   for (var i = 0; i < tdArray.length; i++) {
       let td = document.createElement("td");
