@@ -217,6 +217,8 @@ function CSV2Observations(string)
             continue;
         }
         
+        if( values[i_quality_grade] == "casual" ) continue;
+
         let lat_name_split = lat_name.split(" ");
         
         let is_identified = (lat_name_split.length >= 2);
@@ -442,7 +444,11 @@ function generateYearsTable( speciesMap )
 
             cards.forEach( (card) => 
             {
-                let tdFileds = [...getCardTdSummary( card ), ...getObsTdSummary( card.first_observed ).splice(1), ...getObsTdSummary( card.first_research ) ];
+                let tdFirstObserved = getObsTdSummary( card.first_observed );
+                let tdFirstResearch = getObsTdSummary( card.first_research );
+                if( tdFirstObserved[1] == tdFirstResearch[1] ) tdFirstResearch = ['&larr;','',''];
+
+                let tdFileds = [...getCardTdSummary( card ), ...tdFirstObserved.splice(1), ...tdFirstResearch ];
                 
                 if(first)
                 {
