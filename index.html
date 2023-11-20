@@ -43,7 +43,7 @@ div span{
       <input type="file" id="csvFile" accept=".csv" /><br />
       CSV file for Comparison report (iNats format):<br />
       <input type="file" id="csvFileCompare" accept=".csv" /><br />
-      CSV file for Checklist report (one of columns should contain "inats_name" with iNats compatible latin name and optionally "common_name" to use for name when main CSV has no observations):<br />
+      CSV file for Checklist report (one of columns should contain "scientific_name" with iNats compatible latin name and optionally "common_name" to use as name when main CSV has no observations):<br />
       <input type="file" id="csvFileChecklist" accept=".csv" /><br />
       <br />
       <input type="submit" name="main" value="New species by year report" />
@@ -59,8 +59,8 @@ Any options here, then press red-circled link.<br />
 Green-circled options are required, red-circled options should be avoided (the issues with those are fixed, but be cautious just in case).<br />
    <img width=600 src="img/second.png" /><br /><br />
 Waiting for archive to be available.<br />
-Download archive, unpack it...<br />
-Provide results CSV file to the form:<br />
+Download archive, unpack it...<br /><br />
+Provide results CSV file to the form as Main CSV or Comparison CSV<br />
 </div>
 
    <div id="detail_div"></div>
@@ -274,7 +274,7 @@ function CSV2Checklist(string)
     var headers = CSVarrays[0];
     CSVarrays.shift();
 
-    const knownHeaderName = ["inats_name","common_name"];
+    const knownHeaderName = ["scientific_name","common_name"];
     let   knownHeaderIdx  = [];
     
     for (let i = 0; i < headers.length; i++) {
