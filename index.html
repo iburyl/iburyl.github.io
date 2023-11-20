@@ -39,13 +39,16 @@ div span{
 <body>
 
    <form id="myForm">
-      Main CSV file:<br />
+      Main CSV file (iNats format):<br />
       <input type="file" id="csvFile" accept=".csv" /><br />
-      CSV file for comparison report:<br />
+      CSV file for Comparison report (iNats format):<br />
       <input type="file" id="csvFileCompare" accept=".csv" /><br />
+      CSV file for Checklist report (one of columns should contain "inats_name" with iNats compatible latin name):<br />
+      <input type="file" id="csvFileChecklist" accept=".csv" /><br />
       <br />
       <input type="submit" name="main" value="New species by year report" />
       <input type="submit" name="compare" value="Comparison report" />
+      <input type="submit" name="checklist" value="Checklist report" />
       <br /><br />
    </form>
 
@@ -262,6 +265,47 @@ function CSV2Observations(string)
     }
 
     return observations;
+}
+
+function CSV2Checklist(string)
+{
+    const CSVarrays = CSVToArray(string);
+    
+    var headers = CSVarrays[0];
+    CSVarrays.shift();
+
+    const knownHeaderName = ["inats_name","common_name"];
+    let   knownHeaderIdx  = [];
+    
+    for (let i = 0; i < headers.length; i++) {
+        for (let j = 0; j < knownHeaderName.length; j++) {
+            if(headers[i].includes(knownHeaderName[j])) {
+                knownHeaderIdx[j] = i;
+            }
+        }
+    }
+    const i_lat_name     =knownHeaderIdx[0];
+    const i_lang_name    =knownHeaderIdx[1];
+    console.log(knownHeaderIdx);
+
+    let entries = new Map();
+
+    for(let i = 0; i < CSVarrays.length; i++) {
+        const values = CSVarrays[i];
+
+        let lat_name = values[i_lat_name];
+
+        if( typeof lat_name === "undefined" || lat_name == "" ) continue;
+
+        let entry = {
+            name: values[i_lang_name],
+            lat_name_sp: lat_name,
+        };
+
+        entries.set(lat_name, entry);
+    }
+
+    return entries;
 }
 
 function Observations2SpeciesMap(observations)
@@ -532,6 +576,58 @@ function generateSpeciesSummaryTable( speciesMap, compareSpeciesMap )
     }
 }
 
+function generateChecklistTable( speciesMap, checklistMap )
+{
+    /*
+    const speciesMapSorted = new Map([...speciesMap].sort((a, b) => {
+        if( a[1].total_observed > b[1].total_observed ) return -1;
+        if( a[1].total_observed < b[1].total_observed ) return  1;
+        return 0;
+    }));
+
+    const compareSpeciesMapSorted = new Map([...compareSpeciesMap].sort((a, b) => {
+        if( a[1].total_observed > b[1].total_observed ) return -1;
+        if( a[1].total_observed < b[1].total_observed ) return  1;
+        return 0;
+    }));
+    */
+
+    {
+        const instruction = document.getElementById("instruction");
+        instruction.innerHTML = '';
+        const table_years = document.getElementById("table_years");
+        table_years.innerHTML = '';
+
+        table_years.appendChild(createTr(
+                   [['rowspan',2,'#'], ['colspan',2,'names'], ['colspan',4,'all years'],['colspan',3,'last observation']]));
+
+        table_years.appendChild(createTr(
+                   ['common', 'latin (clickable)', 'obs', 'rsch','ssps','freq'],'year', 'ref', 'user'));
+
+        
+        let i = 1;
+        checklistMap.forEach( (entry, lat_name) =>
+        {
+            if( speciesMap.has( lat_name ) )
+            {
+                let card = speciesMap.get( lat_name );
+
+                let tdFileds = [i, ...getCardTdSummary( card ), ...getObsTdSummary( card.last_observed )];
+
+                table_years.appendChild( createTr( tdFileds ) );
+            }
+            else
+            {
+                let tdFileds = [i, entry.name, lat_name, '','','','','','',''];
+
+                table_years.appendChild( createTr( tdFileds, 'grey'  ) );
+            }
+
+            i++;
+        } );
+    }
+}
+
 </script>
 
 <script>
@@ -649,6 +745,7 @@ myForm.addEventListener("submit", function (e) {
    const button_name = e.submitter.getAttribute("name");
    const input = csvFile.files[0];
    const compare_input = csvFileCompare.files[0];
+   const checklist_input = csvFileChecklist.files[0];
    const reader = new FileReader();
 
    reader.onload = function (event) {
@@ -671,6 +768,17 @@ myForm.addEventListener("submit", function (e) {
             generateSpeciesSummaryTable( speciesMap, compare_speciesMap );
          };
          reader.readAsText(compare_input);
+      }
+      else if( button_name == "checklist" )
+      {
+         const reader = new FileReader();
+         reader.onload = function (checklist_event) {
+            const checklist_string_csv = checklist_event.target.result;
+            const checklistMap = CSV2Checklist(checklist_string_csv);
+     
+            generateChecklistTable( speciesMap, checklistMap );
+         };
+         reader.readAsText(checklist_input);
       }
       
    };
