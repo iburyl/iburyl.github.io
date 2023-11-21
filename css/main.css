@@ -1,12 +1,7 @@
-<!DOCTYPE html>
-<html>
-<head>
-   <meta charset="UTF-8">
+table, th, td {
+    border: 1px solid;
+}
 
-   <style>
-        table, th, td {
-          border: 1px solid;
-        }
 table {
   border-collapse: collapse;
 }
@@ -33,13 +28,3 @@ div span{
   width: 1em;
   height: 1em;
 }
-
-   </style>
-</head>
-<body>
-<h2>Useful scripts</h2>
-<ul>
-<li><a href="inats.html">Parsing iNats exported CSV</a></li>
-</ul>
-</body>
-</html>
