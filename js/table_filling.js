@@ -252,3 +252,182 @@ function generateChecklistTable( speciesMap, checklistMap )
         } );
     }
 }
+
+function fillAncestorTaxDetails(main_inat_card, taxDetail, taxIdMapCache)
+{
+    let query_ids = '';
+
+    main_inat_card.ancestor_ids.forEach((ancestor_id) =>
+    {
+        if(!taxIdMapCache.has(ancestor_id))
+        {
+            if(query_ids !== '')
+            {
+                query_ids += ',';
+            }
+            query_ids += ancestor_id;
+        }
+        else
+        {
+            let ancestor_card = taxIdMapCache.get(ancestor_id);
+
+            if(ancestor_card.rank == 'kingdom') taxDetail[0].innerHTML = ancestor_card.name;
+            if(ancestor_card.rank == 'class')   taxDetail[1].innerHTML = ancestor_card.name;
+            if(ancestor_card.rank == 'order')   taxDetail[2].innerHTML = ancestor_card.name;
+            if(ancestor_card.rank == 'family')  taxDetail[3].innerHTML = ancestor_card.name;
+        }
+    } );
+
+    if(query_ids !== '')
+    {
+        let ancestors_button = taxDetail[7];
+        ancestors_button.innerHTML = 'click';
+        ancestors_button.addEventListener("click", (event) => {
+            console.log('taxon_id='+query_ids);
+
+            fetchAsync('https://api.inaturalist.org/v1/taxa/'+query_ids).then((data) =>
+            {
+                console.log(data);
+
+                data.results.forEach((inat_tax_card) =>
+                {
+                    taxIdMapCache.set(inat_tax_card.id, inat_tax_card);
+                });
+
+                localStorage.setItem("taxIdMapCache", JSON.stringify(taxIdMapCache, mapReplacer));
+            
+                fillAncestorTaxDetails(main_inat_card, taxDetail, taxIdMapCache);
+
+                ancestors_button.remove();
+            });
+
+        });
+    }
+}
+
+function fillMainTaxDetails(inat_cards, taxDetail, taxIdMapCache)
+{
+    let main_inat_card;
+
+    for(let j=0; j<inat_cards.length; j++)
+    {
+        if(inat_cards[j].rank == 'species')
+        {
+            main_inat_card = inat_cards[j];
+
+            break;
+        }
+    }
+
+    if(typeof main_inat_card === "undefined") return;
+
+    taxDetail[4].innerHTML = main_inat_card.name;
+    if(typeof main_inat_card.preferred_common_name !== "undefined") taxDetail[5].innerHTML = main_inat_card.preferred_common_name;
+    taxDetail[6].innerHTML = main_inat_card.id;
+
+    fillAncestorTaxDetails(main_inat_card, taxDetail, taxIdMapCache);    
+}
+
+function generateChecklistForTaxTable( checklistMap )
+{
+    const instruction = document.getElementById("instruction");
+    instruction.innerHTML = '';
+    const table_years = document.getElementById("table_years");
+    table_years.innerHTML = '';
+
+    table_years.appendChild(createTr(
+               [['rowspan',2,'#'], ['colspan',2,'names'],['rowspan',2,'fetch item'],['colspan',8,'iNats tax']]));
+
+    table_years.appendChild(createTr(
+               ['common', 'latin', 'kingdom','class','order','family','species','name','id','fetch ancestors']));
+
+    let taxIdMapCache = localStorage.getItem("taxIdMapCache");
+    if(taxIdMapCache === null)
+    {
+        taxIdMapCache = new Map();
+    }
+    else
+    {
+        taxIdMapCache = JSON.parse(taxIdMapCache, mapReviver);
+    }
+
+    let taxLatNameMapCache = new Map();
+    taxIdMapCache.forEach( (id_entry, id) =>
+    {
+        let named_entries = [];
+        if( taxLatNameMapCache.has( id_entry.name ) )
+        {
+            named_entries = taxLatNameMapCache.get( id_entry.name );
+        }
+
+        named_entries.push( id_entry );
+        taxLatNameMapCache.set( id_entry.name, named_entries )
+    } );
+
+    let i = 1;
+    checklistMap.forEach( (entry, lat_name) =>
+    {
+        let button = document.createElement("span");
+
+        function getSpan() {return document.createElement("span");}
+        
+        let taxDetail = [getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan()];
+    
+        if(!taxLatNameMapCache.has(lat_name))
+        {
+            button.innerHTML = 'click';
+            button.addEventListener("click", (event) => {
+                const params = new URLSearchParams({
+                    q: lat_name,
+                    is_active: true,
+                    order: 'desc',
+                    order_by: 'observations_count',
+                });
+
+                fetchAsync('https://api.inaturalist.org/v1/taxa?'+params.toString().replaceAll('+','%20')).then((data) =>
+                {
+                    let named_entries = [];
+
+                    data.results.forEach((inat_tax_card) =>
+                    {
+                        if( inat_tax_card.name == lat_name )
+                        {
+                            if( !taxIdMapCache.has(inat_tax_card.id) )
+                            {
+                                taxIdMapCache.set(inat_tax_card.id, inat_tax_card);
+                            }
+                            
+                            if( taxLatNameMapCache.has( lat_name ) )
+                            {
+                                named_entries = taxLatNameMapCache.get( lat_name );
+                            }
+
+                            named_entries.push( inat_tax_card );
+                            taxLatNameMapCache.set( lat_name, named_entries );
+                        }
+                    });
+
+                    localStorage.setItem("taxIdMapCache", JSON.stringify(taxIdMapCache, mapReplacer));
+
+                    fillMainTaxDetails(named_entries, taxDetail, taxIdMapCache);
+    
+                    console.log(taxIdMapCache);
+
+                    button.remove();
+                });
+            });
+        }
+        else
+        {
+            let inat_cards = taxLatNameMapCache.get(lat_name);
+
+            fillMainTaxDetails(inat_cards, taxDetail, taxIdMapCache);
+        }
+
+        let tdFileds = [i, entry.name, "<a href='https://www.inaturalist.org/search?q="+lat_name.replace(' ','%20')+"'>"+lat_name+"</a>",button,...taxDetail];
+
+        table_years.appendChild( createTr( tdFileds ) );
+
+        i++;
+    } );
+}

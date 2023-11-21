@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link href="css/main.css" rel="stylesheet" />
+</head>
+<body>
+
+<form id="myForm">
+   CSV file for Checklist report (one of columns should contain "scientific_name" with iNats compatible latin name):<br />
+   <input type="file" id="csvFileChecklist" accept=".csv" /><br />
+   <br />
+   <input type="submit" name="read" value="List species" />
+   <br /><br />
+</form>
+
+<div id="instruction"></div>
+
+<div id="detail_div"></div>
+<table id="table_years"></table>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script type="text/javascript" src="js/csv_to_array.js"></script>
+<script type="text/javascript" src="js/lists_parsing.js"></script>
+<script type="text/javascript" src="js/table_filling.js"></script>
+<script type="text/javascript" src="js/details_overlay.js"></script>
+<script type="text/javascript" src="js/utils.js"></script>
+
+<script>
+
+const myForm = document.getElementById("myForm");
+const csvFileChecklist = document.getElementById("csvFileChecklist");
+
+myForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    const button_name = e.submitter.getAttribute("name");
+    const checklist_input = csvFileChecklist.files[0];
+    const reader = new FileReader();
+    
+    reader.onload = function (event) {
+        const checklist_string_csv = event.target.result;
+    
+        if( button_name == "read" )
+        {
+            const checklistMap = CSV2Checklist(checklist_string_csv);
+            generateChecklistForTaxTable( checklistMap );
+        }
+       
+    };
+    reader.readAsText(checklist_input);
+});
+
+</script>
+</body>
+</html>
