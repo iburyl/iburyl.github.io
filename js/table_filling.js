@@ -412,10 +412,10 @@ async function generateChecklistForTaxTable( checklistMap )
     fetch.innerHTML = 'fetch';
 
     table_years.appendChild(createTr(
-               [['rowspan',2,'#'], ['colspan',2,'names'],['rowspan',2,fetch],['colspan',9,'iNats tax']]));
+               [['rowspan',2,'#'], 'name',['rowspan',2,fetch],['colspan',9,'iNats tax']]));
 
     table_years.appendChild(createTr(
-               ['common', 'latin', 'kingdom','class','order','family','species','name','ru name','id','obs']));
+               ['latin', 'kingdom','class','order','family','species','name','ru name','id','obs']));
 
     let taxIdMapCache = await getTaxIdMapCache();
     let taxLatNameMapCache = taxIdMap2taxLatNameMap(taxIdMapCache);
@@ -430,7 +430,7 @@ async function generateChecklistForTaxTable( checklistMap )
 
         let taxDetail = [getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan()];
 
-        let tdFileds = [i, entry.name, "<a href='https://www.inaturalist.org/search?q="+lat_name.replace(' ','%20')+"'>"+lat_name+"</a>",button,...taxDetail];
+        let tdFileds = [i, "<a href='https://www.inaturalist.org/search?q="+lat_name.replace(' ','%20')+"'>"+lat_name+"</a>",button,...taxDetail];
 
         table_years.appendChild( createTr( tdFileds ) );
 
@@ -471,8 +471,6 @@ async function generateChecklistForTaxTable( checklistMap )
 
             fetchAsync('https://api.inaturalist.org/v1/taxa?locale=ru&'+params.toString().replaceAll('+','%20')).then(async (data) =>
             {
-                console.log("Main query done");
-                console.log(data);
                 console.log("Main query done");
                 let named_entries = [];
 
