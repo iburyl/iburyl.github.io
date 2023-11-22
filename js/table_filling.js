@@ -364,7 +364,7 @@ function fillMainTaxDetails(lat_name, taxDetail, taxLatNameMapCache, taxIdMapCac
     let main_inat_card;
     for(let j=0; j<inat_cards.length; j++)
     {
-        if(inat_cards[j].rank == 'species')
+        if(inat_cards[j].rank_level <= 10)
         {
             main_inat_card = inat_cards[j];
 
@@ -471,6 +471,8 @@ async function generateChecklistForTaxTable( checklistMap )
 
             fetchAsync('https://api.inaturalist.org/v1/taxa?locale=ru&'+params.toString().replaceAll('+','%20')).then(async (data) =>
             {
+                console.log("Main query done");
+                console.log(data);
                 console.log("Main query done");
                 let named_entries = [];
 
