@@ -234,10 +234,11 @@ async function generateChecklistTable( speciesMap, checklistMap )
     table_years.innerHTML = '';
 
     table_years.appendChild(createTr(
-               [['rowspan',2,'#'], ['colspan',8,'tax data'], ['colspan',4,'all years'],['colspan',3,'last observation']]));
+               ['', ['colspan',8,'tax data'], ['colspan',4,'all years'],['colspan',3,'last observation']]));
 
+    
     table_years.appendChild(createTr(
-               ['class','order','family','checklist latin','iNats id', 'en','ru','iNats obs', 'obs', 'rsch','ssps','freq','year', 'ref', 'user']));
+               ['#', 'class','order','family','checklist latin','iNats id', 'en','ru','iNats obs', 'obs', 'rsch','ssps','freq','year', 'ref', 'user']));
 
     
     let i = 1;
@@ -254,9 +255,6 @@ async function generateChecklistTable( speciesMap, checklistMap )
 
         let taxDetailNamePrefix = [taxDetail[1], taxDetail[2], taxDetail[3]];
         let taxDetailNamePostfix = [taxDetail[7], taxDetail[5], taxDetail[6], taxDetail[8]];
-
-        
-
 
         if( speciesMap.has( lat_name ) )
         {
@@ -278,6 +276,21 @@ async function generateChecklistTable( speciesMap, checklistMap )
         i++;
     } );
     
+
+    const getCellValue = (tr, idx) => tr.children[idx].innerText || tr.children[idx].textContent;
+
+    const comparer = (idx, asc) => (a, b) => ((v1, v2) => 
+        v1 !== '' && v2 !== '' && !isNaN(v1) && !isNaN(v2) ? v1 - v2 : v1.toString().localeCompare(v2)
+        )(getCellValue(asc ? a : b, idx), getCellValue(asc ? b : a, idx));
+
+    // do the work...
+    table_years.querySelector('tr:nth-child(2)').querySelectorAll('td').forEach(td => td.addEventListener('click', (() =>
+    {
+        const table = table_years;
+        Array.from(table.querySelectorAll('tr:nth-child(n+3)'))
+            .sort(comparer(Array.from(td.parentNode.children).indexOf(td), this.asc = !this.asc))
+            .forEach(tr => table.appendChild(tr) );
+    })));
 }
 
 function fillAncestorTaxDetails(main_inat_card, taxDetail, taxIdMapCache)
