@@ -285,16 +285,22 @@ function fillAncestorTaxDetails(main_inat_card, taxDetail, taxIdMapCache)
         ancestors_button.addEventListener("click", (event) => {
             console.log('taxon_id='+query_ids);
 
-            fetchAsync('https://api.inaturalist.org/v1/taxa/'+query_ids).then((data) =>
+            fetchAsync('https://api.inaturalist.org/v1/taxa/'+query_ids).then(async (data) =>
             {
                 console.log(data);
 
+                let transaction = await startTaxIdMapCacheUpdate(taxIdMapCache);
+
+                let promises = [];
+                
                 data.results.forEach((inat_tax_card) =>
                 {
-                    taxIdMapCache.set(inat_tax_card.id, inat_tax_card);
+                    promises.push( addCardToTaxIdMapCache(transaction, inat_tax_card) );
                 });
 
-                localStorage.setItem("taxIdMapCache", JSON.stringify(taxIdMapCache, mapReplacer));
+                await Promise.all( promises );
+
+                await finalizeTaxIdMapCacheUpdate(transaction);
             
                 fillAncestorTaxDetails(main_inat_card, taxDetail, taxIdMapCache);
 
@@ -328,7 +334,7 @@ function fillMainTaxDetails(inat_cards, taxDetail, taxIdMapCache)
     fillAncestorTaxDetails(main_inat_card, taxDetail, taxIdMapCache);    
 }
 
-function generateChecklistForTaxTable( checklistMap )
+async function generateChecklistForTaxTable( checklistMap )
 {
     const instruction = document.getElementById("instruction");
     instruction.innerHTML = '';
@@ -341,15 +347,7 @@ function generateChecklistForTaxTable( checklistMap )
     table_years.appendChild(createTr(
                ['common', 'latin', 'kingdom','class','order','family','species','name','id','fetch ancestors']));
 
-    let taxIdMapCache = localStorage.getItem("taxIdMapCache");
-    if(taxIdMapCache === null)
-    {
-        taxIdMapCache = new Map();
-    }
-    else
-    {
-        taxIdMapCache = JSON.parse(taxIdMapCache, mapReviver);
-    }
+    let taxIdMapCache = await getTaxIdMapCache();
 
     let taxLatNameMapCache = new Map();
     taxIdMapCache.forEach( (id_entry, id) =>
@@ -384,18 +382,19 @@ function generateChecklistForTaxTable( checklistMap )
                     order_by: 'observations_count',
                 });
 
-                fetchAsync('https://api.inaturalist.org/v1/taxa?'+params.toString().replaceAll('+','%20')).then((data) =>
+                fetchAsync('https://api.inaturalist.org/v1/taxa?'+params.toString().replaceAll('+','%20')).then(async (data) =>
                 {
                     let named_entries = [];
 
+                    let transaction = await startTaxIdMapCacheUpdate(taxIdMapCache);
+                    
+                    let promises = [];
+                    
                     data.results.forEach((inat_tax_card) =>
                     {
                         if( inat_tax_card.name == lat_name )
                         {
-                            if( !taxIdMapCache.has(inat_tax_card.id) )
-                            {
-                                taxIdMapCache.set(inat_tax_card.id, inat_tax_card);
-                            }
+                            promises.push( addCardToTaxIdMapCache(transaction, inat_tax_card) );
                             
                             if( taxLatNameMapCache.has( lat_name ) )
                             {
@@ -407,7 +406,9 @@ function generateChecklistForTaxTable( checklistMap )
                         }
                     });
 
-                    localStorage.setItem("taxIdMapCache", JSON.stringify(taxIdMapCache, mapReplacer));
+                    await Promise.all( promises );
+
+                    await finalizeTaxIdMapCacheUpdate(transaction);
 
                     fillMainTaxDetails(named_entries, taxDetail, taxIdMapCache);
     
