@@ -16,7 +16,15 @@ function createTr(tdArray, trClass) {
       else if( Array.isArray(tdArray[i]) )
       {
           td.setAttribute(tdArray[i][0], tdArray[i][1]);
-          td.innerHTML = tdArray[i][2];
+
+          if( tdArray[i][2] instanceof HTMLElement )
+          {
+            td.appendChild( tdArray[i][2] );
+          }
+          else
+          {
+            td.innerHTML = tdArray[i][2];
+          }
       }
       else
       {
@@ -349,7 +357,7 @@ function fillMainTaxDetails(lat_name, taxDetail, taxLatNameMapCache, taxIdMapCac
     taxDetail[4].innerHTML = main_inat_card.name;
     if(typeof main_inat_card.english_common_name !== "undefined") taxDetail[5].innerHTML = main_inat_card.english_common_name;
     if(typeof main_inat_card.preferred_common_name !== "undefined") taxDetail[6].innerHTML = main_inat_card.preferred_common_name;
-    taxDetail[7].innerHTML = main_inat_card.id;
+    taxDetail[7].innerHTML = '<a href="https://www.inaturalist.org/taxa/' + main_inat_card.id + '">' + main_inat_card.id + '</a>';
     taxDetail[8].innerHTML = main_inat_card.observations_count;
 
     return main_inat_card;
@@ -380,8 +388,11 @@ async function generateChecklistForTaxTable( checklistMap )
     const table_years = document.getElementById("table_years");
     table_years.innerHTML = '';
 
+    let fetch = getSpan();
+    fetch.innerHTML = 'fetch';
+
     table_years.appendChild(createTr(
-               [['rowspan',2,'#'], ['colspan',2,'names'],['rowspan',2,'fetch item'],['colspan',9,'iNats tax']]));
+               [['rowspan',2,'#'], ['colspan',2,'names'],['rowspan',2,fetch],['colspan',9,'iNats tax']]));
 
     table_years.appendChild(createTr(
                ['common', 'latin', 'kingdom','class','order','family','species','name','ru name','id','obs']));
@@ -389,10 +400,13 @@ async function generateChecklistForTaxTable( checklistMap )
     let taxIdMapCache = await getTaxIdMapCache();
     let taxLatNameMapCache = taxIdMap2taxLatNameMap(taxIdMapCache);
 
+    let all_buttons = [];
+
     let i = 1;
     checklistMap.forEach( (entry, lat_name) =>
     {
         let button = document.createElement("span");
+        all_buttons.push( button );
 
         let taxDetail = [getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan()];
 
@@ -410,8 +424,6 @@ async function generateChecklistForTaxTable( checklistMap )
         }
         else
         {
-            //let inat_cards = taxLatNameMapCache.get(lat_name);
-
             let main_inat_card = fillMainTaxDetails(lat_name, taxDetail, taxLatNameMapCache, taxIdMapCache);
 
             if(typeof main_inat_card != "undefined")
@@ -481,4 +493,23 @@ async function generateChecklistForTaxTable( checklistMap )
             });
         });
     } );
+
+    fetch.addEventListener("click", (event) => {
+        let j=0;
+        let intervalId;
+        function clicker()
+        {
+            if( all_buttons[j].innerHTML == 'click' )
+            {
+                all_buttons[j].click();
+            }
+            j++;
+            if(j == all_buttons.length)
+            {
+                clearInterval(intervalId);
+                console.log('Clicking finished');
+            }
+        }
+        intervalId = setInterval(clicker, 2000);
+    });
 }
