@@ -215,42 +215,54 @@ function generateSpeciesSummaryTable( speciesMap, compareSpeciesMap )
     }
 }
 
-function generateChecklistTable( speciesMap, checklistMap )
+async function generateChecklistTable( speciesMap, checklistMap )
 {
+    let taxIdMapCache = await getTaxIdMapCache();
+    let taxLatNameMapCache = taxIdMap2taxLatNameMap(taxIdMapCache);
+    
+    const instruction = document.getElementById("instruction");
+    instruction.innerHTML = '';
+    const table_years = document.getElementById("table_years");
+    table_years.innerHTML = '';
+
+    table_years.appendChild(createTr(
+               [['rowspan',2,'#'], ['colspan',2,'names'], ['colspan',4,'all years'],['colspan',3,'last observation'],['colspan',9,'iNats tax']]));
+
+    table_years.appendChild(createTr(
+               ['common', 'latin (clickable)', 'obs', 'rsch','ssps','freq','year', 'ref', 'user', 'kingdom','class','order','family','species','name','ru name','id','obs']));
+
+    
+    let i = 1;
+    checklistMap.forEach( (entry, lat_name) =>
     {
-        const instruction = document.getElementById("instruction");
-        instruction.innerHTML = '';
-        const table_years = document.getElementById("table_years");
-        table_years.innerHTML = '';
+        let taxDetail = [getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan()];
 
-        table_years.appendChild(createTr(
-                   [['rowspan',2,'#'], ['colspan',2,'names'], ['colspan',4,'all years'],['colspan',3,'last observation']]));
+        let main_inat_card = fillMainTaxDetails(lat_name, taxDetail, taxLatNameMapCache, taxIdMapCache);
 
-        table_years.appendChild(createTr(
-                   ['common', 'latin (clickable)', 'obs', 'rsch','ssps','freq'],'year', 'ref', 'user'));
-
-        
-        let i = 1;
-        checklistMap.forEach( (entry, lat_name) =>
+        if(typeof main_inat_card !== "undefined")
         {
-            if( speciesMap.has( lat_name ) )
-            {
-                let card = speciesMap.get( lat_name );
+            fillAncestorTaxDetails(main_inat_card, taxDetail, taxIdMapCache);
+        }
 
-                let tdFileds = [i, ...getCardTdSummary( card ), ...getObsTdSummary( card.last_observed )];
 
-                table_years.appendChild( createTr( tdFileds ) );
-            }
-            else
-            {
-                let tdFileds = [i, entry.name, "<a href='https://www.inaturalist.org/search?q="+lat_name.replace(' ','%20')+"'>"+lat_name+"</a>", '','','','','','',''];
+        if( speciesMap.has( lat_name ) )
+        {
+            let card = speciesMap.get( lat_name );
 
-                table_years.appendChild( createTr( tdFileds, 'grey'  ) );
-            }
+            let tdFileds = [i, ...getCardTdSummary( card ), ...getObsTdSummary( card.last_observed ), ...taxDetail];
 
-            i++;
-        } );
-    }
+            table_years.appendChild( createTr( tdFileds ) );
+        }
+        else
+        {
+            let tdFileds = [i, entry.name, "<a href='https://www.inaturalist.org/search?q="+lat_name.replace(' ','%20')+"'>"+lat_name+"</a>", '','','','','','','', ...taxDetail];
+
+            table_years.appendChild( createTr( tdFileds, 'grey'  ) );
+        }
+
+        i++;
+    } );
+    
 }
 
 function fillAncestorTaxDetails(main_inat_card, taxDetail, taxIdMapCache)
@@ -315,10 +327,13 @@ async function queryAncestors(main_inat_card, taxIdMapCache)
     });
 }
 
-function fillMainTaxDetails(inat_cards, taxDetail, taxIdMapCache)
+function fillMainTaxDetails(lat_name, taxDetail, taxLatNameMapCache, taxIdMapCache)
 {
-    let main_inat_card;
+    if(!taxLatNameMapCache.has(lat_name)) return;
 
+    let inat_cards = taxLatNameMapCache.get(lat_name);
+
+    let main_inat_card;
     for(let j=0; j<inat_cards.length; j++)
     {
         if(inat_cards[j].rank == 'species')
@@ -332,27 +347,16 @@ function fillMainTaxDetails(inat_cards, taxDetail, taxIdMapCache)
     if(typeof main_inat_card === "undefined") return;
 
     taxDetail[4].innerHTML = main_inat_card.name;
-    if(typeof main_inat_card.preferred_common_name !== "undefined") taxDetail[5].innerHTML = main_inat_card.preferred_common_name;
-    taxDetail[6].innerHTML = main_inat_card.id;
+    if(typeof main_inat_card.english_common_name !== "undefined") taxDetail[5].innerHTML = main_inat_card.english_common_name;
+    if(typeof main_inat_card.preferred_common_name !== "undefined") taxDetail[6].innerHTML = main_inat_card.preferred_common_name;
+    taxDetail[7].innerHTML = main_inat_card.id;
+    taxDetail[8].innerHTML = main_inat_card.observations_count;
 
     return main_inat_card;
 }
 
-async function generateChecklistForTaxTable( checklistMap )
+function taxIdMap2taxLatNameMap(taxIdMapCache)
 {
-    const instruction = document.getElementById("instruction");
-    instruction.innerHTML = '';
-    const table_years = document.getElementById("table_years");
-    table_years.innerHTML = '';
-
-    table_years.appendChild(createTr(
-               [['rowspan',2,'#'], ['colspan',2,'names'],['rowspan',2,'fetch item'],['colspan',7,'iNats tax']]));
-
-    table_years.appendChild(createTr(
-               ['common', 'latin', 'kingdom','class','order','family','species','name','id']));
-
-    let taxIdMapCache = await getTaxIdMapCache();
-
     let taxLatNameMapCache = new Map();
     taxIdMapCache.forEach( (id_entry, id) =>
     {
@@ -366,14 +370,31 @@ async function generateChecklistForTaxTable( checklistMap )
         taxLatNameMapCache.set( id_entry.name, named_entries )
     } );
 
+    return taxLatNameMapCache;
+}
+
+async function generateChecklistForTaxTable( checklistMap )
+{
+    const instruction = document.getElementById("instruction");
+    instruction.innerHTML = '';
+    const table_years = document.getElementById("table_years");
+    table_years.innerHTML = '';
+
+    table_years.appendChild(createTr(
+               [['rowspan',2,'#'], ['colspan',2,'names'],['rowspan',2,'fetch item'],['colspan',9,'iNats tax']]));
+
+    table_years.appendChild(createTr(
+               ['common', 'latin', 'kingdom','class','order','family','species','name','ru name','id','obs']));
+
+    let taxIdMapCache = await getTaxIdMapCache();
+    let taxLatNameMapCache = taxIdMap2taxLatNameMap(taxIdMapCache);
+
     let i = 1;
     checklistMap.forEach( (entry, lat_name) =>
     {
         let button = document.createElement("span");
 
-        function getSpan() {return document.createElement("span");}
-        
-        let taxDetail = [getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan()];
+        let taxDetail = [getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan()];
 
         let tdFileds = [i, entry.name, "<a href='https://www.inaturalist.org/search?q="+lat_name.replace(' ','%20')+"'>"+lat_name+"</a>",button,...taxDetail];
 
@@ -389,9 +410,9 @@ async function generateChecklistForTaxTable( checklistMap )
         }
         else
         {
-            let inat_cards = taxLatNameMapCache.get(lat_name);
+            //let inat_cards = taxLatNameMapCache.get(lat_name);
 
-            let main_inat_card = fillMainTaxDetails(inat_cards, taxDetail, taxIdMapCache);
+            let main_inat_card = fillMainTaxDetails(lat_name, taxDetail, taxLatNameMapCache, taxIdMapCache);
 
             if(typeof main_inat_card != "undefined")
             {
@@ -416,7 +437,7 @@ async function generateChecklistForTaxTable( checklistMap )
                 order_by: 'observations_count',
             });
 
-            fetchAsync('https://api.inaturalist.org/v1/taxa?'+params.toString().replaceAll('+','%20')).then(async (data) =>
+            fetchAsync('https://api.inaturalist.org/v1/taxa?locale=ru&'+params.toString().replaceAll('+','%20')).then(async (data) =>
             {
                 console.log("Main query done");
                 let named_entries = [];
@@ -444,7 +465,7 @@ async function generateChecklistForTaxTable( checklistMap )
 
                 await finalizeTaxIdMapCacheUpdate(transaction);
 
-                let main_inat_card = fillMainTaxDetails(named_entries, taxDetail, taxIdMapCache);
+                let main_inat_card = fillMainTaxDetails(lat_name, taxDetail, taxLatNameMapCache, taxIdMapCache);
 
                 if(typeof main_inat_card != "undefined")
                 {

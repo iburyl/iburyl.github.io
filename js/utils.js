@@ -23,3 +23,6 @@ function mapReviver(key, value) {
   }
   return value;
 }
+
+function getSpan() {return document.createElement("span");}
+        
