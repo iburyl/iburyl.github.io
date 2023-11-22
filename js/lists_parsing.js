@@ -112,7 +112,7 @@ function CSV2Checklist(string)
     var headers = CSVarrays[0];
     CSVarrays.shift();
 
-    const knownHeaderName = ["scientific_name","common_name"];
+    const knownHeaderName = ["scientific_name"];
     let   knownHeaderIdx  = [];
     
     for (let i = 0; i < headers.length; i++) {
@@ -123,7 +123,6 @@ function CSV2Checklist(string)
         }
     }
     const i_lat_name     =knownHeaderIdx[0];
-    const i_lang_name    =knownHeaderIdx[1];
     console.log(knownHeaderIdx);
 
     let entries = new Map();
@@ -136,8 +135,7 @@ function CSV2Checklist(string)
         if( typeof lat_name === "undefined" || lat_name == "" ) continue;
 
         let entry = {
-            name: values[i_lang_name],
-            lat_name_sp: lat_name,
+            lat_name: lat_name,
         };
 
         entries.set(lat_name, entry);

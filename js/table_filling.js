@@ -234,10 +234,10 @@ async function generateChecklistTable( speciesMap, checklistMap )
     table_years.innerHTML = '';
 
     table_years.appendChild(createTr(
-               [['rowspan',2,'#'], ['colspan',2,'names'], ['colspan',4,'all years'],['colspan',3,'last observation'],['colspan',9,'iNats tax']]));
+               [['rowspan',2,'#'], ['colspan',8,'tax data'], ['colspan',4,'all years'],['colspan',3,'last observation']]));
 
     table_years.appendChild(createTr(
-               ['common', 'latin (clickable)', 'obs', 'rsch','ssps','freq','year', 'ref', 'user', 'kingdom','class','order','family','species','name','ru name','id','obs']));
+               ['class','order','family','checklist latin','iNats id', 'en','ru','iNats obs', 'obs', 'rsch','ssps','freq','year', 'ref', 'user']));
 
     
     let i = 1;
@@ -252,18 +252,25 @@ async function generateChecklistTable( speciesMap, checklistMap )
             fillAncestorTaxDetails(main_inat_card, taxDetail, taxIdMapCache);
         }
 
+        let taxDetailNamePrefix = [taxDetail[1], taxDetail[2], taxDetail[3]];
+        let taxDetailNamePostfix = [taxDetail[7], taxDetail[5], taxDetail[6], taxDetail[8]];
+
+        
+
 
         if( speciesMap.has( lat_name ) )
         {
             let card = speciesMap.get( lat_name );
 
-            let tdFileds = [i, ...getCardTdSummary( card ), ...getObsTdSummary( card.last_observed ), ...taxDetail];
+            let cardSummary = getCardTdSummary( card );
+
+            let tdFileds = [i, ...taxDetailNamePrefix, cardSummary[1], ...taxDetailNamePostfix, ...cardSummary.slice(2), ...getObsTdSummary( card.last_observed )];
 
             table_years.appendChild( createTr( tdFileds ) );
         }
         else
         {
-            let tdFileds = [i, entry.name, "<a href='https://www.inaturalist.org/search?q="+lat_name.replace(' ','%20')+"'>"+lat_name+"</a>", '','','','','','','', ...taxDetail];
+            let tdFileds = [i, ...taxDetailNamePrefix, "<a href='https://www.inaturalist.org/search?q="+lat_name.replace(' ','%20')+"'>"+lat_name+"</a>", ...taxDetailNamePostfix, '','','','','','',''];
 
             table_years.appendChild( createTr( tdFileds, 'grey'  ) );
         }
