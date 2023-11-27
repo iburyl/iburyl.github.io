@@ -44,11 +44,10 @@ myForm.addEventListener("submit", function (e) {
         if( button_name == "read" )
         {
             const checklistMap = CSV2Checklist(checklist_string_csv);
-            generateChecklistForTaxTable( checklistMap );
+            generateChecklistFetchingTable( checklistMap );
         }
        
       document.getElementById("instruction").innerHTML = '';
-      document.getElementById("description_tr").innerHTML = '';
     };
     reader.readAsText(checklist_input);
 });

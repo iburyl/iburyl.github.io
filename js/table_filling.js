@@ -271,6 +271,7 @@ async function generateChecklistTable( speciesMap, checklistMap )
     } );
     
 
+    // Column sorting block
     const getCellValue = (tr, idx) => tr.children[idx].innerText || tr.children[idx].textContent;
 
     const comparer = (idx, asc) => (a, b) => ((v1, v2) => 
@@ -395,7 +396,7 @@ function taxIdMap2taxLatNameMap(taxIdMapCache)
     return taxLatNameMapCache;
 }
 
-async function generateChecklistForTaxTable( checklistMap )
+async function generateChecklistFetchingTable( checklistMap )
 {
     const table_years = document.getElementById("table_years");
     table_years.innerHTML = '';
@@ -507,19 +508,22 @@ async function generateChecklistForTaxTable( checklistMap )
     } );
 
     fetch.addEventListener("click", (event) => {
+        console.log('Clicking started...');
         let j=0;
         let intervalId;
         function clicker()
         {
-            if( all_buttons[j].innerHTML == 'click' )
-            {
-                all_buttons[j].click();
-            }
-            j++;
+            while( j < all_buttons.length && all_buttons[j].innerHTML != 'click' ) j++;
             if(j == all_buttons.length)
             {
                 clearInterval(intervalId);
                 console.log('Clicking finished');
+                return;
+            }
+            if( all_buttons[j].innerHTML == 'click' )
+            {
+                console.log('Click...');
+                all_buttons[j].click();
             }
         }
         intervalId = setInterval(clicker, 2000);
