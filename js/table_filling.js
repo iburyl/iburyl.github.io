@@ -112,8 +112,6 @@ function generateYearsTable( speciesMap )
     const speciesYearsMapSorted = new Map([...speciesYearsMap].sort());
 
     {
-        const instruction = document.getElementById("instruction");
-        instruction.innerHTML = '';
         const table_years = document.getElementById("table_years");
         table_years.innerHTML = '';
 
@@ -170,8 +168,6 @@ function generateSpeciesSummaryTable( speciesMap, compareSpeciesMap )
     }));
 
     {
-        const instruction = document.getElementById("instruction");
-        instruction.innerHTML = '';
         const table_years = document.getElementById("table_years");
         table_years.innerHTML = '';
 
@@ -228,8 +224,6 @@ async function generateChecklistTable( speciesMap, checklistMap )
     let taxIdMapCache = await getTaxIdMapCache();
     let taxLatNameMapCache = taxIdMap2taxLatNameMap(taxIdMapCache);
     
-    const instruction = document.getElementById("instruction");
-    instruction.innerHTML = '';
     const table_years = document.getElementById("table_years");
     table_years.innerHTML = '';
 
@@ -403,8 +397,6 @@ function taxIdMap2taxLatNameMap(taxIdMapCache)
 
 async function generateChecklistForTaxTable( checklistMap )
 {
-    const instruction = document.getElementById("instruction");
-    instruction.innerHTML = '';
     const table_years = document.getElementById("table_years");
     table_years.innerHTML = '';
 

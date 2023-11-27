@@ -47,6 +47,8 @@ myForm.addEventListener("submit", function (e) {
             generateChecklistForTaxTable( checklistMap );
         }
        
+      document.getElementById("instruction").innerHTML = '';
+      document.getElementById("description_tr").innerHTML = '';
     };
     reader.readAsText(checklist_input);
 });

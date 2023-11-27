@@ -7,21 +7,55 @@
 <body>
 
    <form id="myForm">
+   <table>
+   <tr>
+     <td colspan="3" align="center">
       Main CSV file (iNats format):<br />
       <input type="file" id="csvFile" accept=".csv" /><br />
-      CSV file for Comparison report (iNats format):<br />
+     </td>
+   </tr>
+   <tr>
+     <td>
+     </td>
+     <td align="center">
+      CSV file to compare (iNats format):<br />
       <input type="file" id="csvFileCompare" accept=".csv" /><br />
-      CSV file for Checklist report (one of columns should contain "scientific_name" in header with iNats compatible latin name values):<br />
+     </td>
+     <td align="center">
+      Checklist CSV file (Checklist format):<br />
       <input type="file" id="csvFileChecklist" accept=".csv" /><br />
-      <br />
+     </td>
+   </tr>
+   <tr>
+     <td align="center">
       <input type="submit" name="main" value="New species by year report" />
+     </td>
+     <td align="center">
       <input type="submit" name="compare" value="Comparison report" />
+     </td>
+     <td align="center">
       <input type="submit" name="checklist" value="Checklist report" />
-      <br /><br />
+     </td>
+   </tr>
+   <tr id="description_tr">
+     <td>
+      Species are sorted by first observation and grouped by year of the first observation.<br /><br />
+      Shows progress in discovering new species over the years.
+     </td>
+     <td>
+      Species are sorted by number of observations in Main CSV, the last observation from compared CSV is shown (or line is greyed out). Followed by list of species available only in Copared CSV.<br /><br />
+      Shows whether species from Main CSV were already covered with compared CSV. (e.g. for finding species in the regioncc (main csv), which are not yet found by individual (compared csv))
+     </td>
+     <td>
+      Species are listed in the order of first appearance in checklist, the last observation from Main CSV is shown (or line is greyed out).<br /><br />
+      Shows wether species from Compared CSV were already covered with Main CSV. (e.g. for finding species in the project (checklist csv), which lacks observations (MAIN CSV))
+     </td>
+   </tr>
+   </table>
    </form>
 
 <div id="instruction">
-<h3>Instruction:</h3>
+<h3>Instruction for iNats format:</h3>
 Any options here, then press red-circled link.<br />
    <img width=600 src="img/first.jpeg" /><br /><br />
 Green-circled options are required, red-circled options should be avoided (the issues with those are fixed, but be cautious just in case).<br />
@@ -29,6 +63,10 @@ Green-circled options are required, red-circled options should be avoided (the i
 Waiting for archive to be available.<br />
 Download archive, unpack it...<br /><br />
 Provide results CSV file to the form as Main CSV or Comparison CSV<br />
+
+<h3>Instruction for Checklist format:</h3>
+This is any CSV file, with one of the columns headers containing "scientific_name" and values are latin taxa names with iNats compatible names.<br />
+iNats CSV files are compatible with Checklist format, but only single column is used from them.
 </div>
 
    <div id="detail_div"></div>
@@ -87,6 +125,8 @@ myForm.addEventListener("submit", function (e) {
          };
          reader.readAsText(checklist_input);
       }
+      document.getElementById("instruction").innerHTML = '';
+      document.getElementById("description_tr").innerHTML = '';
       
    };
    reader.readAsText(input);
