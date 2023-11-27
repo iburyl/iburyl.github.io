@@ -455,6 +455,7 @@ async function generateChecklistFetchingTable( checklistMap )
         }
         
         button.addEventListener("click", (event) => {
+            console.log("Fetching: " + lat_name);
             const params = new URLSearchParams({
                 q: lat_name,
                 is_active: true,
