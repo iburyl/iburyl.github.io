@@ -526,6 +526,7 @@ async function generateChecklistFetchingTable( checklistMap )
                 console.log('Click...');
                 all_buttons[j].click();
             }
+            j++;
         }
         intervalId = setInterval(clicker, 2000);
     });
