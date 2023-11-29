@@ -9,23 +9,23 @@
 <tr>
 <td>
 <form id="myForm">
-   CSV file for Checklist report (one of columns should contain "scientific_name" with iNats compatible latin name):<br />
-   <input type="file" id="csvFileChecklist" accept=".csv" /><br />
-   <br />
-   <input type="submit" name="read" value="List species" />
-   <br /><br />
+    Checklist CSV file (Checklist format):<br />
+    <input type="file" id="csvFileChecklist" accept=".csv" /><br />
+    <br />
+    <input type="submit" name="read" value="List species" />
+    <br /><br />
 </form>
 </td>
 <td>
 <form id="ebirdForm">
-   <label for="ebird_key">eBird API key:</label><br>
-   <input type="text" id="ebird_key" name="ebird_key"><br>
-   <label for="ebird_region">eBird region id:</label><br>
-   <input type="text" id="ebird_region" name="ebird_region">
-   <br />
-   <input type="submit" name="read" value="List species" />
-   <br /><br />
-   <span id="ebirdDownload"></span>
+    <label for="ebird_key">eBird API key:</label><br>
+    <input type="text" id="ebird_key" name="ebird_key"><br>
+    <label for="ebird_region">eBird region id:</label><br>
+    <input type="text" id="ebird_region" name="ebird_region">
+    <br />
+    <input type="submit" name="read" value="List species" />
+    <br /><br />
+    <span id="ebirdDownload"></span>
 </form>
 </table>
 </td>

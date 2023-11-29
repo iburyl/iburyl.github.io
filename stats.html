@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link href="css/main.css" rel="stylesheet" />
+</head>
+<body>
+<table>
+<tr>
+<td>
+<form id="summerArrivalForm">
+   CSV file to compare (iNats format):<br />
+   <input type="file" id="csvFile" accept=".csv" /><br />
+   <br />
+   <input type="submit" name="read" value="Summer arrival report" />
+   <br /><br />
+</form>
+</td>
+</tr>
+<div id="instruction"></div>
+
+<div id="detail_div"></div>
+<table id="table_years"></table>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script type="text/javascript" src="js/csv_to_array.js"></script>
+<script type="text/javascript" src="js/lists_parsing.js"></script>
+<script type="text/javascript" src="js/table_filling.js"></script>
+<script type="text/javascript" src="js/stats_tables.js"></script>
+<script type="text/javascript" src="js/details_overlay.js"></script>
+<script type="text/javascript" src="js/storage_indexeddb_queries.js"></script>
+<script type="text/javascript" src="js/utils.js"></script>
+
+<script>
+
+const summerArrivalForm = document.getElementById("summerArrivalForm");
+
+summerArrivalForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    const csvFile = document.getElementById("csvFile");
+
+    const button_name = e.submitter.getAttribute("name");
+    const csv_input = csvFile.files[0];
+    const reader = new FileReader();
+    
+    reader.onload = function (event) {
+        const string = event.target.result;
+        const observations = CSV2Observations(string);
+        const speciesMap = Observations2SpeciesMap(observations);
+    
+        generateArrivalStatsTable( speciesMap );
+       
+        document.getElementById("instruction").innerHTML = '';
+    };
+    reader.readAsText(csv_input);
+});
+
+</script>
+</body>
+</html>
