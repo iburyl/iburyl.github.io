@@ -121,9 +121,7 @@ ebirdForm.addEventListener("submit", function (e) {
         var ebirdDownloadA = document.createElement("a");
 
         const now = new Date();
-        console.log(now);
         const dateString = now.getFullYear() + '-' + (now.getMonth()+1) + '-' + now.getDate();
-        console.log(dateString);
 
         var url = URL.createObjectURL(blob);
         ebirdDownloadA.setAttribute("href", url);
