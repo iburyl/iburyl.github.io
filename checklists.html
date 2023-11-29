@@ -5,7 +5,9 @@
   <link href="css/main.css" rel="stylesheet" />
 </head>
 <body>
-
+<table>
+<tr>
+<td>
 <form id="myForm">
    CSV file for Checklist report (one of columns should contain "scientific_name" with iNats compatible latin name):<br />
    <input type="file" id="csvFileChecklist" accept=".csv" /><br />
@@ -13,7 +15,21 @@
    <input type="submit" name="read" value="List species" />
    <br /><br />
 </form>
-
+</td>
+<td>
+<form id="ebirdForm">
+   <label for="ebird_key">eBird API key:</label><br>
+   <input type="text" id="ebird_key" name="ebird_key"><br>
+   <label for="ebird_region">eBird region id:</label><br>
+   <input type="text" id="ebird_region" name="ebird_region">
+   <br />
+   <input type="submit" name="read" value="List species" />
+   <br /><br />
+   <span id="ebirdDownload"></span>
+</form>
+</table>
+</td>
+</tr>
 <div id="instruction"></div>
 
 <div id="detail_div"></div>
@@ -30,10 +46,11 @@
 <script>
 
 const myForm = document.getElementById("myForm");
-const csvFileChecklist = document.getElementById("csvFileChecklist");
 
 myForm.addEventListener("submit", function (e) {
     e.preventDefault();
+    const csvFileChecklist = document.getElementById("csvFileChecklist");
+
     const button_name = e.submitter.getAttribute("name");
     const checklist_input = csvFileChecklist.files[0];
     const reader = new FileReader();
@@ -50,6 +67,71 @@ myForm.addEventListener("submit", function (e) {
       document.getElementById("instruction").innerHTML = '';
     };
     reader.readAsText(checklist_input);
+});
+
+
+const ebirdForm = document.getElementById("ebirdForm");
+
+ebirdForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    const form = e.target;
+    const ebird_key    = form.elements['ebird_key'].value;
+    const ebird_region = form.elements['ebird_region'].value;
+
+    const table_years = document.getElementById("table_years");
+    table_years.innerHTML = '';
+    const ebirdDownloadSpan = document.getElementById("ebirdDownload");
+    ebirdDownloadSpan.innerHTML = '';
+
+    let ebird_list = '';
+    fetchAsync('https://api.ebird.org/v2/product/spplist/'+ebird_region+'?key='+ebird_key).then(async (data) =>
+    {
+        data.forEach((name) =>
+        {
+            if(ebird_list != '') ebird_list += ',';
+            ebird_list += name;
+        });
+    })
+    .then(async () =>
+    {
+        return fetchAsync('https://api.ebird.org/v2/ref/taxonomy/ebird?key='+ebird_key+'&locale=ru&fmt=json&species='+ebird_list);
+    })
+    .then(async (data) =>
+    {
+        table_years.appendChild(createTr(['#','ebird Tax id', 'latin name', 'ru name']));
+
+        let arrayData = [];
+        arrayData.push([ '#','ebird Tax id', 'scientific_name', 'ebird ru name']);
+        
+        let i = 1;
+        data.forEach((card) =>
+        {
+            table_years.appendChild(createTr([ i, card.speciesCode, card.sciName, card.comName ]));
+
+            arrayData.push([ i, card.speciesCode, card.sciName, card.comName ]);
+
+            i++;
+        });
+
+        const csvString = ArrayToCSV(arrayData);
+
+        var blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+
+        const ebirdDownloadSpan = document.getElementById("ebirdDownload");
+        var ebirdDownloadA = document.createElement("a");
+
+        const now = new Date();
+        console.log(now);
+        const dateString = now.getFullYear() + '-' + (now.getMonth()+1) + '-' + now.getDate();
+        console.log(dateString);
+
+        var url = URL.createObjectURL(blob);
+        ebirdDownloadA.setAttribute("href", url);
+        ebirdDownloadA.setAttribute("download", 'ebird-checklist-'+ebird_region+'-'+dateString+'.csv');
+        ebirdDownloadA.innerHTML = 'download';
+        ebirdDownloadSpan.appendChild(ebirdDownloadA);
+
+    });
 });
 
 </script>
