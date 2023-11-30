@@ -7,29 +7,41 @@
 <body>
 <table>
 <tr>
-<td>
-<form id="myForm">
-    Checklist CSV file (Checklist format):<br />
-    <input type="file" id="csvFileChecklist" accept=".csv" /><br />
-    <br />
-    <input type="submit" name="read" value="List species" />
-    <br /><br />
-</form>
-</td>
-<td>
-<form id="ebirdForm">
-    <label for="ebird_key">eBird API key:</label><br>
-    <input type="text" id="ebird_key" name="ebird_key"><br>
-    <label for="ebird_region">eBird region id:</label><br>
-    <input type="text" id="ebird_region" name="ebird_region">
-    <br />
-    <input type="submit" name="read" value="List species" />
-    <br /><br />
-    <span id="ebirdDownload"></span>
-</form>
-</table>
-</td>
+    <td>
+    <form id="myForm">
+        Checklist CSV file (Checklist format):<br />
+        <input type="file" id="csvFileChecklist" accept=".csv" /><br />
+        <br />
+        <input type="submit" name="read" value="List species" />
+        <br /><br />
+    </form>
+    </td>
+    <td>
+    <form id="ebirdForm">
+        <label for="ebird_key">eBird API key:</label><br>
+        <input type="text" id="ebird_key" name="ebird_key"><br>
+        <label for="ebird_region">eBird region id:</label><br>
+        <input type="text" id="ebird_region" name="ebird_region">
+        <br />
+        <input type="submit" name="read" value="List species" />
+        <br /><br />
+        <span id="ebirdDownload"></span>
+    </form>
+    </td>
 </tr>
+<tr id="description_tr">
+    <td>
+        Two main purposes:
+        <ul>
+        <li>List the species from checklist wuthout any comparison</li>
+        <li>Fetch tax data from iNats and cache it locally in your browser to use in other reports</li>
+        </ul>
+    </td>
+    <td>
+        Fetch the list of all observed birds in the region in eBirds and save it in the form of CSV checklist
+    </td>
+</tr>
+</table>
 <div id="instruction"></div>
 
 <div id="detail_div"></div>
@@ -63,10 +75,11 @@ myForm.addEventListener("submit", function (e) {
             const checklistMap = CSV2Checklist(checklist_string_csv);
             generateChecklistFetchingTable( checklistMap );
         }
-       
-      document.getElementById("instruction").innerHTML = '';
     };
     reader.readAsText(checklist_input);
+       
+    document.getElementById("instruction").innerHTML = '';
+    document.getElementById("description_tr").innerHTML = '';
 });
 
 
@@ -130,6 +143,9 @@ ebirdForm.addEventListener("submit", function (e) {
         ebirdDownloadSpan.appendChild(ebirdDownloadA);
 
     });
+       
+    document.getElementById("instruction").innerHTML = '';
+    document.getElementById("description_tr").innerHTML = '';
 });
 
 </script>

@@ -41,7 +41,7 @@
    <tr id="description_tr">
      <td>
       Species are sorted by first observation and grouped by year of the first observation.<br /><br />
-      Shows progress in discovering new species over the years.
+      Shows the progress in discovering new species over the years.
      </td>
      <td>
       Species are sorted by number of observations in Main CSV, the last observation from compared CSV is shown (or line is greyed out). Followed by list of species available only in Compared CSV.<br /><br />
@@ -59,11 +59,12 @@
 <h3>Instruction for iNats format:</h3>
 Any options here, then press red-circled link.<br />
    <img width=600 src="img/first.jpeg" /><br /><br />
-Green-circled options are required, red-circled options should be avoided (the issues with those are fixed, but be cautious just in case).<br />
+Green-circled options are required for parsing (should be checked by default).<br />
    <img width=600 src="img/second.png" /><br /><br />
-Waiting for archive to be available.<br />
-Download archive, unpack it...<br /><br />
-Provide results CSV file to the form as Main CSV or Comparison CSV<br />
+Wait for archive to be available.<br />
+Download archive<br />
+Unpack it...<br /><br />
+Provide results CSV file to the form as Main CSV or Comparison CSV<br /><br />
 
 <h3>Instruction for Checklist format:</h3>
 This is any CSV file, with one of the columns headers containing "scientific_name" and values are latin taxa names with iNats compatible names.<br />
@@ -124,11 +125,7 @@ myForm.addEventListener("submit", function (e) {
      
             generateChecklistTable( speciesMap, checklistMap ).then((downloadArray) =>
             {
-                //console.log(downloadArray);
-
                 const csvString = ArrayToCSV(downloadArray);
-
-                //console.log(csvString);
 
                 var blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
 
@@ -139,6 +136,8 @@ myForm.addEventListener("submit", function (e) {
                 downloadA.setAttribute("href", url);
                 downloadA.setAttribute("download", 'checklist.csv');
                 downloadA.innerHTML = 'download';
+                
+                downloadSpan.innerHTML = '';
                 downloadSpan.appendChild(downloadA);
             });
          };
