@@ -37,6 +37,24 @@ function createTr(tdArray, trClass) {
   return tr;
 }
 
+function addSorting( table, headerRowNum )
+{
+    // Column sorting block
+    const getCellValue = (tr, idx) => tr.children[idx].innerText || tr.children[idx].textContent;
+
+    const comparer = (idx, asc) => (a, b) => ((v1, v2) => 
+        v1 !== '' && v2 !== '' && !isNaN(v1) && !isNaN(v2) ? v1 - v2 : v1.toString().localeCompare(v2)
+        )(getCellValue(asc ? a : b, idx), getCellValue(asc ? b : a, idx));
+
+    // do the work...
+    table.querySelector('tr:nth-child('+headerRowNum+')').querySelectorAll('td').forEach(td => td.addEventListener('click', (() =>
+    {
+        Array.from(table.querySelectorAll('tr:nth-child(n+'+(headerRowNum+1)+')'))
+            .sort(comparer(Array.from(td.parentNode.children).indexOf(td), this.asc = !this.asc))
+            .forEach(tr => table.appendChild(tr) );
+    })));
+}
+
 function getCardTdSummary( card )
 {
     let name = card.name;
@@ -278,6 +296,7 @@ async function generateChecklistTable( speciesMap, checklistMap )
     } );
     
 
+    /*
     // Column sorting block
     const getCellValue = (tr, idx) => tr.children[idx].innerText || tr.children[idx].textContent;
 
@@ -293,6 +312,9 @@ async function generateChecklistTable( speciesMap, checklistMap )
             .sort(comparer(Array.from(td.parentNode.children).indexOf(td), this.asc = !this.asc))
             .forEach(tr => table.appendChild(tr) );
     })));
+    */
+
+    addSorting( table_years, 2 );
 
     return download_array;
 }

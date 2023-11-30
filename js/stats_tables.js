@@ -153,7 +153,7 @@ function generateSpeciesStatDetail( card, speciesMap )
       });
 }
 
-function generateArrivalStatsTable( speciesMap )
+function getKnownYears( speciesMap, startingFrom )
 {
     var knownYearsUnsorted = new Set();
 
@@ -162,21 +162,132 @@ function generateArrivalStatsTable( speciesMap )
         card.observations.forEach( (obs) =>
         {
             let year = obs.time.getFullYear();
-            if(year>2012) knownYearsUnsorted.add( year );
+            if(year>=startingFrom) knownYearsUnsorted.add( year );
 
         });
     } );
 
     const knownYears = new Set([...knownYearsUnsorted].sort());
+    return knownYears;
+}
+
+function countObservationsPerMonth( observations )
+{
+    let months = Array(12).fill(0);
+
+    observations.forEach((obs) =>
+    {
+        months[obs.time.getMonth()]++;
+    });
+
+    return months;
+}
+
+function getCategoryOld( observations )
+{
+    let category = '.';
+
+    if( observations.length > 20 )
+    {
+        let totalPerMonth = countObservationsPerMonth( observations );
+        
+        let DecJan = (totalPerMonth[0]+totalPerMonth[1]);
+        let JunJul = (totalPerMonth[5]+totalPerMonth[6]);
+        
+        if(JunJul/DecJan > 5)
+        {
+            category = 'summer ';
+
+            if(DecJan == 0) category += 'only';
+            //else category += Math.round(JunJul/DecJan*10)/10 + ' ';
+
+            if(JunJul/DecJan < 10) category += 'mostly';
+        }
+        else if(DecJan/JunJul > 5)
+        {
+            category = 'winter ';
+
+            if(JunJul == 0) category += 'only';
+            //else category += Math.round(DecJan/JunJul*10)/10 + ' ';
+
+            if(DecJan/JunJul < 10) category += 'mostly';
+        }
+        else category = 'all year';
+    }
+
+    return category;
+}
+
+function getCategory( observations )
+{
+    let category = '.';
+
+    if( observations.length > 20 )
+    {
+        let totalPerMonth = countObservationsPerMonth( observations );
+        let total = 0;
+        totalPerMonth.forEach( (monthObs) => { total+=monthObs; } )
+
+        let maxMonth=0;
+        let maxMonthIdx=0;
+        for(let i=0; i<totalPerMonth.length; i++)
+        {
+            if(totalPerMonth[i]>maxMonth)
+            {
+                maxMonth=totalPerMonth[i];
+                maxMonthIdx=i;
+            }
+        }
+
+        let rangeTotal=maxMonth;
+        let leftIndex=maxMonthIdx;
+        let rightIndex=maxMonthIdx;
+
+        while( rangeTotal < total*0.95 )
+        {
+            let earlierIndex = (12 + leftIndex - 1)%12;
+            let laterIndex   = (rightIndex + 1)%12;
+
+            if(totalPerMonth[earlierIndex] > totalPerMonth[laterIndex])
+            {
+                rangeTotal += totalPerMonth[earlierIndex];
+                leftIndex--;
+            }
+            else
+            {
+                rangeTotal += totalPerMonth[laterIndex];
+                rightIndex++;
+            }
+        }
+
+        let Months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+        if( rightIndex-leftIndex > 9 )
+        {
+            category = 'All year';
+        }
+        else
+        {
+            category = Months[(12+leftIndex)%12] + ' - ' + Months[(rightIndex)%12];
+        }
+    }
+
+    return category;
+}
+
+function generateArrivalStatsTable( speciesMap )
+{
+    const knownYears = getKnownYears( speciesMap, 2013 );
 
     const table_years = document.getElementById("table_years");
     table_years.innerHTML = '';
 
-    table_years.appendChild(createTr(['latin', 'common', ...knownYears]));
+    table_years.appendChild(createTr(['latin', 'common', 'category', ...knownYears]));
 
     speciesMap.forEach( (card, key) =>
     {
         let yearsMap = new Map();
+        let category = getCategory( card.observations );
 
         card.observations.forEach( (obs) =>
         {
@@ -238,8 +349,8 @@ function generateArrivalStatsTable( speciesMap )
 
         lat_name.innerHTML = card.lat_name;
 
-        table_years.appendChild(createTr([lat_name, card.name, ...cols]));
+        table_years.appendChild(createTr([lat_name, card.name, category, ...cols]));
     } );
 
-
+    addSorting( table_years, 1 );
 }
