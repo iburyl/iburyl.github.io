@@ -8,11 +8,11 @@
 <table>
 <tr>
 <td>
-<form id="summerArrivalForm">
-   CSV file to compare (iNats format):<br />
+<form id="migrationForm">
+   CSV file to analyze (iNats format):<br />
    <input type="file" id="csvFile" accept=".csv" /><br />
    <br />
-   <input type="submit" name="read" value="Summer arrival report" />
+   <input type="submit" name="read" value="Migration report" />
    <br /><br />
 </form>
 </td>
@@ -33,9 +33,9 @@
 
 <script>
 
-const summerArrivalForm = document.getElementById("summerArrivalForm");
+const migrationForm = document.getElementById("migrationForm");
 
-summerArrivalForm.addEventListener("submit", function (e) {
+migrationForm.addEventListener("submit", function (e) {
     e.preventDefault();
     const csvFile = document.getElementById("csvFile");
 
@@ -48,7 +48,7 @@ summerArrivalForm.addEventListener("submit", function (e) {
         const observations = CSV2Observations(string);
         const speciesMap = Observations2SpeciesMap(observations);
     
-        generateArrivalStatsTable( speciesMap );
+        generateMigrationStatsTable( speciesMap );
        
         document.getElementById("instruction").innerHTML = '';
     };

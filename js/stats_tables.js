@@ -275,7 +275,7 @@ function getCategory( observations )
     return category;
 }
 
-function generateArrivalStatsTable( speciesMap )
+function generateMigrationStatsTable( speciesMap )
 {
     const knownYears = getKnownYears( speciesMap, 2013 );
 
