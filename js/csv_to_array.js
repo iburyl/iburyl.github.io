@@ -91,6 +91,7 @@ function ArrayToCSV(arrRows) {
         var finalVal = '';
         for (var j = 0; j < row.length; j++) {
             var innerValue = row[j] === null ? '' : row[j].toString();
+            if (row[j] instanceof HTMLElement) innerValue = row[j].innerHTML;
             if (row[j] instanceof Date) {
                 innerValue = row[j].toLocaleString();
             };

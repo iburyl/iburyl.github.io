@@ -227,6 +227,8 @@ async function generateChecklistTable( speciesMap, checklistMap )
     const table_years = document.getElementById("table_years");
     table_years.innerHTML = '';
 
+    let download_array = [];
+
     table_years.appendChild(createTr(
                ['', ['colspan',8,'tax data'], ['colspan',4,'all years'],['colspan',3,'last observation']]));
 
@@ -234,6 +236,7 @@ async function generateChecklistTable( speciesMap, checklistMap )
     table_years.appendChild(createTr(
                ['#', 'class','order','family','checklist latin','iNats id', 'en','ru','iNats obs', 'obs', 'rsch','ssps','freq','year', 'ref', 'user']));
 
+    download_array.push(['#', 'class','order','family','checklist latin','iNats id', 'en','ru','iNats obs', 'obs', 'rsch','ssps', 'year', 'ref', 'user']);
     
     let i = 1;
     checklistMap.forEach( (entry, lat_name) =>
@@ -259,12 +262,16 @@ async function generateChecklistTable( speciesMap, checklistMap )
             let tdFileds = [i, ...taxDetailNamePrefix, cardSummary[1], ...taxDetailNamePostfix, ...cardSummary.slice(2), ...getObsTdSummary( card.last_observed )];
 
             table_years.appendChild( createTr( tdFileds ) );
+
+            download_array.push([...tdFileds.slice(0,12), ...tdFileds.slice(13)]);
         }
         else
         {
-            let tdFileds = [i, ...taxDetailNamePrefix, "<a href='https://www.inaturalist.org/search?q="+lat_name.replace(' ','%20')+"'>"+lat_name+"</a>", ...taxDetailNamePostfix, '','','','','','',''];
+            let tdFileds = [i, ...taxDetailNamePrefix, lat_name, ...taxDetailNamePostfix, '','','','','','',''];
 
             table_years.appendChild( createTr( tdFileds, 'grey'  ) );
+
+            download_array.push([...tdFileds.slice(0,12), ...tdFileds.slice(13)]);
         }
 
         i++;
@@ -286,6 +293,8 @@ async function generateChecklistTable( speciesMap, checklistMap )
             .sort(comparer(Array.from(td.parentNode.children).indexOf(td), this.asc = !this.asc))
             .forEach(tr => table.appendChild(tr) );
     })));
+
+    return download_array;
 }
 
 function fillAncestorTaxDetails(main_inat_card, taxDetail, taxIdMapCache)

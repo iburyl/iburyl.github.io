@@ -34,7 +34,8 @@
       <input type="submit" name="compare" value="Comparison report" />
      </td>
      <td align="center">
-      <input type="submit" name="checklist" value="Checklist report" />
+      <input type="submit" name="checklist" value="Checklist report" /><br />
+      <span id="checklistDownload"></span>
      </td>
    </tr>
    <tr id="description_tr">
@@ -121,7 +122,25 @@ myForm.addEventListener("submit", function (e) {
             const checklist_string_csv = checklist_event.target.result;
             const checklistMap = CSV2Checklist(checklist_string_csv);
      
-            generateChecklistTable( speciesMap, checklistMap );
+            generateChecklistTable( speciesMap, checklistMap ).then((downloadArray) =>
+            {
+                //console.log(downloadArray);
+
+                const csvString = ArrayToCSV(downloadArray);
+
+                //console.log(csvString);
+
+                var blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+
+                const downloadSpan = document.getElementById("checklistDownload");
+                var downloadA = document.createElement("a");
+
+                var url = URL.createObjectURL(blob);
+                downloadA.setAttribute("href", url);
+                downloadA.setAttribute("download", 'checklist.csv');
+                downloadA.innerHTML = 'download';
+                downloadSpan.appendChild(downloadA);
+            });
          };
          reader.readAsText(checklist_input);
       }
