@@ -40,7 +40,11 @@ function createTr(tdArray, trClass) {
 function addSorting( table, headerRowNum )
 {
     // Column sorting block
-    const getCellValue = (tr, idx) => tr.children[idx].innerText || tr.children[idx].textContent;
+    const getCellValue = (tr, idx) => {
+        let data = tr.children[idx].getAttribute('data-sorting');
+        if(data !== null && data !== '') return data;
+        return tr.children[idx].innerText || tr.children[idx].textContent;
+    };
 
     const comparer = (idx, asc) => (a, b) => ((v1, v2) => 
         v1 !== '' && v2 !== '' && !isNaN(v1) && !isNaN(v2) ? v1 - v2 : v1.toString().localeCompare(v2)
