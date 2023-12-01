@@ -314,6 +314,7 @@ function generateMigrationStatsTable( speciesMap )
 
             for(let j=0; j<90; j++)
             {
+                if( startSearchIdx + j == lifetimeLength) break;
                 if( timeline[startSearchIdx + j] == 0 ) continue;
                 if(j < 15) {comment[i] = 'noisy'; break}
 
