@@ -21,7 +21,7 @@ div#detail_div canvas {
   height: 300px;
 }
 
-div span{
+div.freq span{
   display: inline-block;
   background-color: #1e90ff;
   text-align: center;

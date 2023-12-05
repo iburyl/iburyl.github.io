@@ -6,9 +6,43 @@ function getDaysFrom1Jan(time)
     return delta;
 }
 
-function getEventsInFrameArray( events, frameSize )
+function getKnownYears( card, startingFrom )
+{
+    var knownYearsUnsorted = new Set();
+
+    card.observations.forEach( (obs) =>
+    {
+        let year = obs.time.getFullYear();
+        if(year>=startingFrom) knownYearsUnsorted.add( year );
+
+    });
+
+    const knownYears = new Set([...knownYearsUnsorted].sort());
+    return knownYears;
+}
+
+function getAllKnownYears( speciesMap, startingFrom )
+{
+    var knownYearsUnsorted = new Set();
+
+    speciesMap.forEach( (card, key) =>
+    {
+        let cardYears = getKnownYears( card, startingFrom );
+        cardYears.forEach((year) => {knownYearsUnsorted.add( year );});
+    } );
+
+    const knownYears = new Set([...knownYearsUnsorted].sort());
+    return knownYears;
+}
+
+function getEventsInFrameArray( events, frameSize, normalized, year )
 {
     let eventNumInFrame = Array(365).fill(0);
+
+    if(typeof year !== "undefined")
+    {
+        events = events.filter((obs) => obs.time.getFullYear() == year);
+    }
 
     let sortedEvents = events.toSorted( (a, b) =>
     {
@@ -35,18 +69,58 @@ function getEventsInFrameArray( events, frameSize )
         eventNumInFrame[i] = k-j;
     }
 
-    let max = Math.max(...eventNumInFrame);
+    if(normalized)
+    {
+        let max = Math.max(...eventNumInFrame);
+        eventNumInFrame = eventNumInFrame.map((el) => el/max)
+    }
 
-    return eventNumInFrame.map((el) => el/max);
+    return eventNumInFrame;
+}
+
+function getScatterYearDaysGraph( datasets, canvas )
+{
+    let data_datasets = [];
+    datasets.forEach( (dataset) =>
+    {
+        let i = 0;
+        let scattered = dataset.values.map( (el) => { i++; return {x:i, y:el}; } );
+
+        data_datasets.push({
+            label: dataset.label,
+            data: scattered,
+            borderWidth: (typeof dataset.borderWidth === "undefined") ? 1 : dataset.borderWidth,
+            pointStyle : false,
+            showLine: true,
+        });
+    } );
+
+    let chart = new Chart(canvas,
+        {
+            type: 'scatter',
+            data: { datasets: data_datasets },
+            options: {
+              scales: {
+                x: {
+                    max: 365,
+                    ticks: {
+                        callback: function(label, index, labels) {
+                            const Months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                            
+                            return Months[index%12];
+                        },
+                         stepSize: 365/12
+                     },
+                }
+              },
+            }
+        });
+    return chart;
 }
 
 function generateSpeciesStatDetail( card, speciesMap )
 {
     let frame = 3*7;
-
-    let obsNumInNextWeek = getEventsInFrameArray( card.observations, frame );
-
-    let obsNumInNextWeekNormalized = [];
 
     const detail_div = document.getElementById("detail_div");
     detail_div.innerHTML = card.name + ' (' + card.lat_name + ')';
@@ -54,77 +128,54 @@ function generateSpeciesStatDetail( card, speciesMap )
     let deltaGraphCanvas = document.createElement("canvas");
     detail_div.appendChild( deltaGraphCanvas );
 
+    let obsNumInFrame = getEventsInFrameArray( card.observations, frame, true );
+    let obsNumInFrameShifted = [];
+    for(let i = 0; i<obsNumInFrame.length; i++)
+    {
+        obsNumInFrameShifted[i] = obsNumInFrame[ Math.trunc(365 + i - frame/2)%365 ];
+    }
+
+    getScatterYearDaysGraph( [
+        {label:'#', values: obsNumInFrameShifted, borderWidth:3},
+        {label:'#', values: getEventsInFrameArray( card.observations, 1, true )},
+    ], deltaGraphCanvas);
+    
+    let knownYears = getKnownYears( card, 2013 );
+
+    detail_div.appendChild( document.createElement("br") );
+    detail_div.appendChild( document.createElement("br") );
+
+    let years_div = document.createElement("div");
+    detail_div.appendChild( years_div );
+
+    detail_div.appendChild( document.createElement("br") );
     detail_div.appendChild( document.createElement("br") );
 
     let deltaGraphCanvas2 = document.createElement("canvas");
     detail_div.appendChild( deltaGraphCanvas2 );
 
-    let scattered_data = []; //obsNumInNextWeek.map( (el) => { i++; return {x:i, y:el}; } );
-    for(let i = 0; i<obsNumInNextWeek.length; i++)
+    let yearChart;
+    
+    knownYears.forEach((year) =>
     {
-        let date = new Date(Date.UTC(2000));
-        date.setDate(date.getDate() + i);
+        let span = document.createElement("span");
+        span.innerHTML = year;
 
-        scattered_data[i] = {x:i, y:obsNumInNextWeek[ Math.trunc(365 + i - frame/2)%365 ]};
-    }
-
-    let i = 0;
-    let scattered_data1 = getEventsInFrameArray( card.observations, 1 ).map( (el) => { i++; return {x:i, y:el}; } );
-
-    new Chart(deltaGraphCanvas, {
-        type: 'scatter',
-        labels: [{x:0, y:'0'}, {x:100, y:'100'}],
-        data: {
-          datasets: [{
-            label: '#',
-            data: scattered_data,
-            borderWidth: 3,
-            pointStyle : false,
-            showLine: true,
-
-          },{
-            label: '#',
-            data: scattered_data1,
-            borderWidth: 1,
-            pointStyle : false,
-            showLine: true,
-
-          }]
-        },
-        options: {
-          scales: {
-            x: {
-                max: 365,
-                ticks: {
-                    callback: function(label, index, labels) {
-                        const Months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                        
-                        return Months[index%12];
-                    },
-                     stepSize: 30
-                 },
-            }
-          },
-        }
-      });
-}
-
-function getKnownYears( speciesMap, startingFrom )
-{
-    var knownYearsUnsorted = new Set();
-
-    speciesMap.forEach( (card, key) =>
-    {
-        card.observations.forEach( (obs) =>
+        span.addEventListener("click", (event) =>
         {
-            let year = obs.time.getFullYear();
-            if(year>=startingFrom) knownYearsUnsorted.add( year );
+            event.preventDefault();
 
+            if(typeof yearChart !== "undefined") yearChart.destroy();
+
+            yearChart = getScatterYearDaysGraph( [{label:year, values: getEventsInFrameArray( card.observations, 1, false, year )}], deltaGraphCanvas2);
         });
-    } );
+        
+        years_div.appendChild( span );
+        let space = document.createElement("span");
+        space.innerHTML = ' ';
+        years_div.appendChild( space );
+    });
 
-    const knownYears = new Set([...knownYearsUnsorted].sort());
-    return knownYears;
 }
 
 function getLastKnownDate( speciesMap )
@@ -160,24 +211,29 @@ function countObservationsPerMonth( observations )
     return months;
 }
 
-function getCategory( observations )
+function countObservationsPerDay( observations )
 {
-    if( observations.length < 50 )
-    {
-        return {category:'.', monthsPresent:'.', fromText:'.', toText:'.'};
-    }
+    let days = Array(366).fill(0);
 
-    let totalPerMonth = countObservationsPerMonth( observations );
-    let total = 0;
-    totalPerMonth.forEach( (monthObs) => { total+=monthObs; } )
+    observations.forEach((obs) =>
+    {
+        days[Math.trunc(getDaysFrom1Jan(obs.time))]++;
+    });
+
+    return days;
+}
+
+function getMaxBox( values, targetTotal )
+{
+    let length = values.length;
 
     let maxMonth=0;
     let maxMonthIdx=0;
-    for(let i=0; i<totalPerMonth.length; i++)
+    for(let i=0; i<values.length; i++)
     {
-        if(totalPerMonth[i]>maxMonth)
+        if(values[i]>maxMonth)
         {
-            maxMonth=totalPerMonth[i];
+            maxMonth=values[i];
             maxMonthIdx=i;
         }
     }
@@ -186,29 +242,46 @@ function getCategory( observations )
     let leftIndex=maxMonthIdx;
     let rightIndex=maxMonthIdx;
 
-    const targetTotal = total*0.95;
+    function averageValue(index)
+    {
+        if(length<64) return values[index];
+        else
+        {
+            let aver = 0;
+            const halfFrame = 7;
+            for( let i=-halfFrame; i<=halfFrame; i++)
+            {
+                aver += values[(length + index + i)%length];                
+            }
+            return aver/(halfFrame*2+1);
+        }
+    }
 
     while( rangeTotal < targetTotal )
     {
-        let earlierIndex = (12 + leftIndex - 1)%12;
-        let laterIndex   = (rightIndex + 1)%12;
+        let earlierIndex = (length + leftIndex - 1)%length;
+        let laterIndex   = (rightIndex + 1)%length;
 
-        let earlierValue = totalPerMonth[earlierIndex];
-        let laterValue = totalPerMonth[laterIndex];
+        let earlierValue = values[earlierIndex];
+        let laterValue = values[laterIndex];
+
+        let earlierValueAver = averageValue(earlierIndex);
+        let laterValueAver = averageValue(laterIndex);
 
         let earlierDelta = maxMonthIdx-leftIndex;
         let laterDelta = rightIndex-maxMonthIdx;
 
-        if(earlierValue > laterValue)
+        if(earlierValueAver > laterValueAver)
         {
             rangeTotal += earlierValue;
             leftIndex--;
         }
-        else if(earlierValue < laterValue)
+        else if(earlierValueAver < laterValueAver)
         {
             rangeTotal += laterValue;
             rightIndex++;
-        } else if(earlierDelta > laterDelta)
+        }
+         else if(earlierDelta > laterDelta)
         {
             rangeTotal += laterValue;
             rightIndex++;
@@ -222,11 +295,11 @@ function getCategory( observations )
     // trim range
     while(1)
     {
-        let leftCorrectedIndex = (12 + leftIndex)%12;
-        let rightCorrectedIndex = (rightIndex)%12;
+        let leftCorrectedIndex = (length + leftIndex)%length;
+        let rightCorrectedIndex = (rightIndex)%length;
 
-        let leftValue = totalPerMonth[leftCorrectedIndex];
-        let rightValue = totalPerMonth[rightCorrectedIndex];
+        let leftValue = values[leftCorrectedIndex];
+        let rightValue = values[rightCorrectedIndex];
 
         if(leftValue > rightValue)
         {
@@ -254,6 +327,27 @@ function getCategory( observations )
         }
     }
 
+    return {left:leftIndex, right:rightIndex};
+}
+
+function getCategory( observations )
+{
+    if( observations.length < 50 )
+    {
+        return {category:'.', monthsPresent:'.', fromText:'.', toText:'.'};
+    }
+
+    let totalPerMonth = countObservationsPerMonth( observations );
+    let totalPerDay   = countObservationsPerDay( observations );
+    
+    let box = getMaxBox( totalPerMonth, observations.length * 0.95 );
+    let leftIndex = box.left;
+    let rightIndex = box.right;
+
+    let dayBox = getMaxBox( totalPerDay, observations.length * 0.95 );
+    let leftDayIndex = dayBox.left;
+    let rightDayIndex = dayBox.right;
+
     const Months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
     let category = '.';
@@ -266,7 +360,8 @@ function getCategory( observations )
         category = 'Migratory';
     }
 
-    return {category:category, monthsPresent:(rightIndex-leftIndex)+1, from: (12+leftIndex)%12, to: (rightIndex)%12, fromText: Months[(12+leftIndex)%12], toText: Months[(rightIndex)%12]};
+    return {category:category, monthsPresent:(rightIndex-leftIndex)+1, from: (12+leftIndex)%12, to: (rightIndex)%12,
+            fromDay: (365+dayBox.left)%365, toDay: (dayBox.right)%365, };
 }
 
 function getExactArrivalIndex(year, category, timeline, getDateIndex)
@@ -373,15 +468,15 @@ function getStatDepatureIndex(arrivalIdx, category, timeline, getDateIndex)
 
 function generateMigrationStatsTable( speciesMap )
 {
-    const knownYears = [...getKnownYears( speciesMap, 2013 )];
+    const knownYears = [...getAllKnownYears( speciesMap, 2013 )];
 
     const table_migratory = document.getElementById("table_migratory");
     table_migratory.innerHTML = '';
-    table_migratory.appendChild(createTr(['latin', 'common', 'observations', 'category', 'months present', 'from', 'to', ...knownYears]));
+    table_migratory.appendChild(createTr(['latin', 'common', 'observations', 'category', 'months present', 'from', 'to', 'fromDay', 'toDay', ...knownYears]));
 
     const table_allyear = document.getElementById("table_allyear");
     table_allyear.innerHTML = '';
-    table_allyear.appendChild(createTr(['latin', 'common', 'observations', 'category', 'months<br>with most<br>observations', 'from', 'to']));
+    table_allyear.appendChild(createTr(['latin', 'common', 'observations', 'category', 'months<br>with most<br>observations', 'from', 'to', 'fromDay', 'toDay']));
 
     const table_unknown = document.getElementById("table_unknown");
     table_unknown.innerHTML = '';
@@ -427,7 +522,7 @@ function generateMigrationStatsTable( speciesMap )
         });
 
         let category = getCategory( card.observations );
-
+        
         let arrivals  = Array(lifetimeYears).fill(-500);
         let depatures = Array(lifetimeYears);
         let firstObservations = Array(lifetimeYears);
@@ -481,6 +576,12 @@ function generateMigrationStatsTable( speciesMap )
         let year_cols = [];
         const Months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
+        function getDayStringFromIndex(index)
+        {
+            let date = getIndexDate(index);
+            return date.getDate()+' '+Months[date.getMonth()];
+        }
+
         for(let i=0; i<years.length; i++)
         {
             if(arrivals[i] != -500)
@@ -527,8 +628,10 @@ function generateMigrationStatsTable( speciesMap )
         span.innerHTML = category.category;
 
         let main_cols = [card.lat_name, card.name, card.total_observed, span, category.monthsPresent,
-                                         ['data-sorting',category.from,category.fromText],
-                                         ['data-sorting',category.to,category.toText]];
+                                         ['data-sorting',category.from,Months[category.from]],
+                                         ['data-sorting',category.to,Months[category.to]],
+                                         getDayStringFromIndex(category.fromDay),
+                                         getDayStringFromIndex(category.toDay)];
 
         if(category.category == 'Migratory') table_migratory.appendChild(createTr([...main_cols, ...year_cols]));
         else if(category.category == 'All year') table_allyear.appendChild(createTr([...main_cols]));

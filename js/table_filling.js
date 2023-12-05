@@ -82,6 +82,7 @@ function getCardTdSummary( card )
     }
 
     let div = document.createElement("div");
+    div.setAttribute('class','freq');
 
     let monthLetter = ['J','F','M','A','M','J','J','A','S','O','N','D'];
     let maxMonth = Math.max(...card.total_by_month);
@@ -299,25 +300,6 @@ async function generateChecklistTable( speciesMap, checklistMap )
         i++;
     } );
     
-
-    /*
-    // Column sorting block
-    const getCellValue = (tr, idx) => tr.children[idx].innerText || tr.children[idx].textContent;
-
-    const comparer = (idx, asc) => (a, b) => ((v1, v2) => 
-        v1 !== '' && v2 !== '' && !isNaN(v1) && !isNaN(v2) ? v1 - v2 : v1.toString().localeCompare(v2)
-        )(getCellValue(asc ? a : b, idx), getCellValue(asc ? b : a, idx));
-
-    // do the work...
-    table_years.querySelector('tr:nth-child(2)').querySelectorAll('td').forEach(td => td.addEventListener('click', (() =>
-    {
-        const table = table_years;
-        Array.from(table.querySelectorAll('tr:nth-child(n+3)'))
-            .sort(comparer(Array.from(td.parentNode.children).indexOf(td), this.asc = !this.asc))
-            .forEach(tr => table.appendChild(tr) );
-    })));
-    */
-
     addSorting( table_years, 2 );
 
     return download_array;
