@@ -54,9 +54,17 @@ function generateSpeciesStatDetail( card, speciesMap )
     let deltaGraphCanvas = document.createElement("canvas");
     detail_div.appendChild( deltaGraphCanvas );
 
+    detail_div.appendChild( document.createElement("br") );
+
+    let deltaGraphCanvas2 = document.createElement("canvas");
+    detail_div.appendChild( deltaGraphCanvas2 );
+
     let scattered_data = []; //obsNumInNextWeek.map( (el) => { i++; return {x:i, y:el}; } );
     for(let i = 0; i<obsNumInNextWeek.length; i++)
     {
+        let date = new Date(Date.UTC(2000));
+        date.setDate(date.getDate() + i);
+
         scattered_data[i] = {x:i, y:obsNumInNextWeek[ Math.trunc(365 + i - frame/2)%365 ]};
     }
 
@@ -65,6 +73,7 @@ function generateSpeciesStatDetail( card, speciesMap )
 
     new Chart(deltaGraphCanvas, {
         type: 'scatter',
+        labels: [{x:0, y:'0'}, {x:100, y:'100'}],
         data: {
           datasets: [{
             label: '#',
@@ -87,11 +96,11 @@ function generateSpeciesStatDetail( card, speciesMap )
             x: {
                 max: 365,
                 ticks: {
-                    /*
                     callback: function(label, index, labels) {
-                        return '1';
+                        const Months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                        
+                        return Months[index%12];
                     },
-                    */
                      stepSize: 30
                  },
             }
@@ -116,6 +125,27 @@ function getKnownYears( speciesMap, startingFrom )
 
     const knownYears = new Set([...knownYearsUnsorted].sort());
     return knownYears;
+}
+
+function getLastKnownDate( speciesMap )
+{
+    let last;
+    
+    var knownYearsUnsorted = new Set();
+
+    speciesMap.forEach( (card, key) =>
+    {
+        card.observations.forEach( (obs) =>
+        {
+            if(typeof last === "undefined") last = obs.time;
+            else
+            {
+                if(last - obs.time < 0) last = obs.time;
+            }
+        });
+    } );
+
+    return last;
 }
 
 function countObservationsPerMonth( observations )
@@ -236,7 +266,109 @@ function getCategory( observations )
         category = 'Migratory';
     }
 
-    return {category:category, monthsPresent:rightIndex-leftIndex, from: (12+leftIndex)%12, to: (rightIndex)%12, fromText: Months[(12+leftIndex)%12], toText: Months[(rightIndex)%12]};
+    return {category:category, monthsPresent:(rightIndex-leftIndex)+1, from: (12+leftIndex)%12, to: (rightIndex)%12, fromText: Months[(12+leftIndex)%12], toText: Months[(rightIndex)%12]};
+}
+
+function getExactArrivalIndex(year, category, timeline, getDateIndex)
+{
+    let firstGuess = new Date(year, category.from, 1);
+    let startSearchIdx = getDateIndex(firstGuess)-45;
+    if(startSearchIdx < 0) return -1; // out of range
+
+    for(let j=0; j<90; j++)
+    {
+        if( startSearchIdx + j == timeline.length) return -1; // out of range
+        if( timeline[startSearchIdx + j] == 0 ) continue;
+        if(j < 15) return -2; // noisy - unreliable result
+
+        return startSearchIdx + j;
+    }
+}
+
+function getStatArrivalIndex(year, category, timeline, getDateIndex)
+{
+    let firstGuess = new Date(year, category.from, 1);
+    let startSearchIdx = getDateIndex(firstGuess)-45;
+    if(startSearchIdx < 0) return -1; // out of range
+
+    const frame = 7;
+
+    let moving_average = Array(90).fill(0);
+    let data           = Array(90).fill(0);
+    for(let j=0; j<90; j++)
+    {
+        for(let k=0; k<frame; k++)
+        {
+            if( startSearchIdx + j + k == timeline.length) break;
+            moving_average[j] += timeline[startSearchIdx + j + k];
+            data[j] = timeline[startSearchIdx + j];
+        }
+    }
+
+    let average_target = Math.max(moving_average[0], 1) * 2;
+    for(let j=0; j<90; j++)
+    {
+        if( moving_average[j] > average_target && timeline[startSearchIdx + j] > 0)
+        {
+            return startSearchIdx + j;
+        }
+    }
+
+    return -2; // noisy - unreliable result
+}
+
+function getExactDepatureIndex(arrivalIdx, category, timeline, getDateIndex)
+{
+    let minDuration      = Math.trunc((category.monthsPresent-1)*(365/12));
+    let extendedDuration = Math.trunc((category.monthsPresent+3)*(365/12));
+
+    let zeroDaysCount = 0;
+
+    for(let i=minDuration; i<extendedDuration; i++)
+    {
+        if(arrivalIdx + i> timeline.length) return -1; // can be made better
+
+        if( timeline[arrivalIdx+i] != 0 ) zeroDaysCount=0; else zeroDaysCount++;
+
+        if(zeroDaysCount == 45)
+        {
+            return arrivalIdx + i - zeroDaysCount;
+        }
+    }
+
+    return -2; // noisy - unreliable result
+}
+
+
+function getStatDepatureIndex(arrivalIdx, category, timeline, getDateIndex)
+{
+    if(arrivalIdx + 365 > timeline.length) return -1; // can be made better
+
+    let expectedDuration = (category.monthsPresent+2)*30;
+
+    let totalYear = 0;
+    let expectedTotal = 0;
+
+    for(let i=0; i<365; i++) totalYear += timeline[arrivalIdx+i];
+    for(let i=0; i<expectedDuration; i++) expectedTotal += timeline[arrivalIdx+i];
+
+    let currentTotal = 0;
+
+    for(let i=0; i<365; i++)
+    {
+        currentTotal += timeline[arrivalIdx+i];
+        if(currentTotal > expectedTotal * 0.95)
+        {
+            if(currentTotal < totalYear * 0.9)
+            {
+                return -1;
+            }
+
+            return arrivalIdx + i;
+        }
+    }
+
+    return -2; // noisy - unreliable result
 }
 
 function generateMigrationStatsTable( speciesMap )
@@ -258,6 +390,7 @@ function generateMigrationStatsTable( speciesMap )
     const firstYear = knownYears[0];
     const now = new Date();
     const beggining = new Date(Date.UTC(firstYear));
+    const lastKnownDate = getLastKnownDate(speciesMap);
     const ticksPerDay = 1000 * 60 * 60 * 24;
     const lifetimeLength = Math.trunc((now-beggining)/ticksPerDay) + 1;
     const lifetimeYears = now.getFullYear() - firstYear + 1;
@@ -285,8 +418,7 @@ function generateMigrationStatsTable( speciesMap )
         card.observations.forEach( (obs) =>
         {
             if(obs.time > beggining)
-            {
-                let i = getDateIndex(obs.time);
+            {                                  let i = getDateIndex(obs.time);
                 timeline[i]++;
                 timelineObs[i].push(obs);
 
@@ -296,8 +428,10 @@ function generateMigrationStatsTable( speciesMap )
 
         let category = getCategory( card.observations );
 
-        let arrivals = Array(lifetimeYears).fill(-500);
+        let arrivals  = Array(lifetimeYears).fill(-500);
+        let depatures = Array(lifetimeYears);
         let firstObservations = Array(lifetimeYears);
+        let lastObservations = Array(lifetimeYears);
         let comment  = Array(lifetimeYears).fill('-');
         
         for(let i=0; i<years.length; i++)
@@ -307,26 +441,41 @@ function generateMigrationStatsTable( speciesMap )
             let jan1st = new Date(Date.UTC(i+firstYear));
             let yearStartIdx = getDateIndex(jan1st);
 
-            let firstGuess = new Date(i+firstYear, category.from, 1);
-            let startSearch = new Date(firstGuess - 45 * ticksPerDay);
-            let startSearchIdx = getDateIndex(startSearch);
-            if(startSearchIdx < 0) continue;
+            let arrivalIdx = getExactArrivalIndex(firstYear+i, category, timeline, getDateIndex);
+            if(arrivalIdx==-1) continue;
 
-            for(let j=0; j<90; j++)
+            if(arrivalIdx>=0)
             {
-                if( startSearchIdx + j == lifetimeLength) break;
-                if( timeline[startSearchIdx + j] == 0 ) continue;
-                if(j < 15) {comment[i] = 'noisy'; break}
-
-                let days = (startSearchIdx+j)-yearStartIdx;
-
-                let date = new Date(jan1st);
-                date.setDate(date.getDate() +  days);
-                arrivals[i] = date;
-                firstObservations[i] = timelineObs[startSearchIdx + j][0];
-
-                break;
+                arrivals[i] = getIndexDate(arrivalIdx);
+                firstObservations[i] = timelineObs[arrivalIdx][0];
             }
+            else if(arrivalIdx == -2)
+            {
+                comment[i] == 'noisy';
+                arrivalIdx = getStatArrivalIndex(firstYear+i, category, timeline, getDateIndex);
+
+                if(arrivalIdx >= 0) arrivals[i] = getIndexDate(arrivalIdx);
+            }
+
+            let depatureIdx;
+
+            if(arrivalIdx >= 0)
+            {
+                depatureIdx = getExactDepatureIndex(arrivalIdx, category, timeline, getDateIndex);
+
+                if(depatureIdx > 0)
+                {
+                    depatures[i] = getIndexDate(depatureIdx);
+                    lastObservations[i] = timelineObs[depatureIdx][0];
+                }
+                else if(depatureIdx == -2)
+                {
+                    depatureIdx = getStatDepatureIndex(arrivalIdx, category, timeline, getDateIndex);
+
+                    if(depatureIdx >= 0) depatures[i] = getIndexDate(depatureIdx);
+                }
+            }
+
         }
 
         let year_cols = [];
@@ -336,8 +485,35 @@ function generateMigrationStatsTable( speciesMap )
         {
             if(arrivals[i] != -500)
             {
-                year_cols.push(['data-sorting',arrivals[i].valueOf(),
-                    '<a href="'+ firstObservations[i].url +'">'+ arrivals[i].getDate() + ' ' + Months[arrivals[i].getMonth()] + '</a>']);
+                let text = '';
+                if(typeof firstObservations[i] !== "undefined")
+                {
+                    text += '<a href="'+ firstObservations[i].url +'">'+ arrivals[i].getDate() + ' ' + Months[arrivals[i].getMonth()] + '</a>';
+                }
+                else
+                {
+                    text += '~'+ arrivals[i].getDate() + ' ' + Months[arrivals[i].getMonth()];
+                }
+
+                text += '<br>';
+
+                if(typeof depatures[i] !== "undefined")
+                {
+                    if(typeof lastObservations[i] !== "undefined")
+                    {
+                        text += '<a href="'+ lastObservations[i].url +'">'+ depatures[i].getDate() + ' ' + Months[depatures[i].getMonth()] + '</a>';
+                    }
+                    else
+                    {
+                        text += '~'+ depatures[i].getDate() + ' ' + Months[depatures[i].getMonth()];
+                    }
+                }
+                else
+                {
+                    text += '?';
+                }
+
+                year_cols.push(['data-sorting',arrivals[i].valueOf(),text]);
             }
             else year_cols.push(comment[i]);
         }
