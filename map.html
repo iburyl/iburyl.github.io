@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link href="css/main.css" rel="stylesheet" />
+
+<style>
+#chartdiv {
+  width: 100%;
+  height: 1000px;
+}
+</style>
+
+</head>
+<body>
+<table>
+<tr>
+<td>
+<form id="geoForm">
+   CSV file to analyze (iNats format + geo data):<br />
+   <input type="file" id="csvFile" accept=".csv" /><br />
+   <br />
+   <input type="submit" name="read" value="Migration report" />
+   <br /><br />
+</form>
+</td>
+</tr>
+</table>
+<div id="instruction"></div>
+
+<div id="detail_div"></div>
+
+<h2 id="start">Map</h2>
+<div id="chartdiv"></div>
+
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script type="text/javascript" src="js/csv_to_array.js"></script>
+<script type="text/javascript" src="js/lists_parsing.js"></script>
+<script type="text/javascript" src="js/table_filling.js"></script>
+<script type="text/javascript" src="js/stats_tables.js"></script>
+<script type="text/javascript" src="js/details_overlay.js"></script>
+<script type="text/javascript" src="js/storage_indexeddb_queries.js"></script>
+<script type="text/javascript" src="js/utils.js"></script>
+<script type="text/javascript" src="js/geographical_chart.js"></script>
+
+<script src="https://cdn.amcharts.com/lib/5/index.js"></script>
+<script src="https://cdn.amcharts.com/lib/5/map.js"></script>
+<script src="https://cdn.amcharts.com/lib/5/geodata/worldLow.js"></script>
+<script src="https://cdn.amcharts.com/lib/5/themes/Animated.js"></script>
+
+<script>
+let root;
+let chart;
+var pointSeries;
+
+am5.ready(function() {
+
+    // Create root element: https://www.amcharts.com/docs/v5/getting-started/#Root_element
+    root = am5.Root.new("chartdiv");
+    // Set themes: https://www.amcharts.com/docs/v5/concepts/themes/
+    root.setThemes([ am5themes_Animated.new(root) ]);
+    // Create the map chart: https://www.amcharts.com/docs/v5/charts/map-chart/
+    chart = root.container.children.push(am5map.MapChart.new(root, {
+      panX: "translateX",
+      panY: "translateY",
+      projection: am5map.geoMercator()
+    }));
+
+    // Create main polygon series for countries: https://www.amcharts.com/docs/v5/charts/map-chart/map-polygon-series/
+    var polygonSeries = chart.series.push(am5map.MapPolygonSeries.new(root, {
+      geoJSON: am5geodata_worldLow,
+      exclude: ["AQ"]
+    }));
+
+    pointSeries = chart.series.push(am5map.MapPointSeries.new(root, {}));
+
+}); // end am5.ready()
+
+</script>
+
+<script>
+const geoForm = document.getElementById("geoForm");
+
+geoForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    const csvFile = document.getElementById("csvFile");
+
+    const button_name = e.submitter.getAttribute("name");
+    const csv_input = csvFile.files[0];
+    const reader = new FileReader();
+    
+    reader.onload = function (event) {
+        const string = event.target.result;
+        const observations = CSV2Observations(string);
+
+        const obs_with_geo = observations.filter((obs) => (typeof obs.geo_lat !== "undefined" && typeof obs.geo_long !== "undefined"));
+    
+        console.log(obs_with_geo.length);
+
+        
+        let daysObs = Array(366);
+        for(let i=0; i<daysObs.length; i++) daysObs[i] = [];
+        
+        obs_with_geo.forEach( (obs) =>
+        {
+            let i = Math.trunc(getDaysFrom1Jan(obs.time));
+            daysObs[i].push(obs);
+        });
+
+        let timeoutID;
+        let it=0;
+
+        timeoutID = setInterval(() =>
+        {
+            let data = [];
+
+            for(j=0; j<7 && it-j>=0; j++)
+            {
+                let dayData = daysObs[it-j].map((obs) =>
+                {
+                    return {
+                        geometry: {
+                            type: "Point",
+                            coordinates: [obs.geo_long, obs.geo_lat],
+                        }
+                    };
+                });
+
+                data = [...data, ...dayData];
+            }
+
+            pointSeries.bullets.clear();
+
+            pointSeries.data.setAll(data);
+
+            pointSeries.bullets.push(function() {
+              return am5.Bullet.new(root, {
+                sprite: am5.Circle.new(root, {
+                  radius: 3,
+                  fill: am5.color(0xffba00)
+                })
+              });
+            });
+
+          
+            let date = new Date(2004,0,1);
+            date.setDate(date.getDate() + it);
+
+            const Months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+            document.getElementById("start").innerHTML = Months[date.getMonth()]+' '+date.getDate();
+
+            it++;
+
+            //if(it==daysObs.length) clearInterval(timeoutID);
+            if(it==daysObs.length) it = 0;
+
+        }, 100);
+            
+        document.getElementById("instruction").innerHTML = '';
+    };
+    reader.readAsText(csv_input);
+});
+</script>
+
+</body>
+</html>
