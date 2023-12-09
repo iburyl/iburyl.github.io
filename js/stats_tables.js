@@ -35,47 +35,40 @@ function getAllKnownYears( speciesMap, startingFrom )
     return knownYears;
 }
 
-function getEventsInFrameArray( events, frameSize, normalized, year )
+function getObservationsPerDay( events, year )
 {
-    let eventNumInFrame = Array(365).fill(0);
+    let days = Array(366).fill(0);
 
-    if(typeof year !== "undefined")
+    events.forEach((obs) =>
     {
-        events = events.filter((obs) => obs.time.getFullYear() == year);
-    }
+        if(typeof year !== "undefined" && obs.time.getFullYear() != year) return;
 
-    let sortedEvents = events.toSorted( (a, b) =>
-    {
-        let deltaA = getDaysFrom1Jan(a.time);
-        let deltaB = getDaysFrom1Jan(b.time);
-        if(deltaA>deltaB) return  1;
-        if(deltaA<deltaB) return -1;
-        return 0;
+        days[Math.trunc(getDaysFrom1Jan(obs.time))]++;
     });
 
-    let j=0;
-    for(let i=0; i<365; i++)
-    {
-        while(j<sortedEvents.length && getDaysFrom1Jan(sortedEvents[j].time)<i) j++;
-        if(j == sortedEvents.length) break;
+    return days;
+}
 
-        let k=j;
-        while(k<sortedEvents.length && getDaysFrom1Jan(sortedEvents[k].time)<i+frameSize) k++;
-        if(k==sortedEvents.length)
+function getMovingAverage( eventsPerDay, halfFrame )
+{
+    const length = eventsPerDay.length;
+    let eventNumInFrame = Array(length).fill(0);
+
+    for(let i=0; i<length; i++)
+    {
+        for(let j=-halfFrame ; j<=halfFrame ; j++)
         {
-            while(k<2*sortedEvents.length && getDaysFrom1Jan(sortedEvents[k-sortedEvents.length].time)+365<i+frameSize) k++;
+            eventNumInFrame[i] += eventsPerDay[(length + i + j)%length] * (1+halfFrame-Math.abs(j))/(1+halfFrame);
         }
-
-        eventNumInFrame[i] = k-j;
-    }
-
-    if(normalized)
-    {
-        let max = Math.max(...eventNumInFrame);
-        eventNumInFrame = eventNumInFrame.map((el) => el/max)
     }
 
     return eventNumInFrame;
+}
+
+function normalize(eventsPerDay)
+{
+    let max = Math.max(...eventsPerDay);
+    return eventsPerDay.map((el) => el/max)
 }
 
 function getScatterYearDaysGraph( datasets, canvas )
@@ -84,7 +77,28 @@ function getScatterYearDaysGraph( datasets, canvas )
     datasets.forEach( (dataset) =>
     {
         let i = 0;
-        let scattered = dataset.values.map( (el) => { i++; return {x:i, y:el}; } );
+        let scattered; 
+
+        if(typeof dataset.interval === "undefined" || dataset.interval == false)
+        {
+            scattered = dataset.values.map( (el) => { i++; return {x:i, y:el}; } );
+        }
+        else
+        {
+            let value = 1;
+            if(typeof dataset.value !== "undefined")
+            {
+                value = dataset.value;
+            }
+
+            let left  = (dataset.values[0] + 366)%366;
+            let right = (dataset.values[1])%366;
+            
+            if( left<=right )
+                scattered = [ {x:0, y:0}, {x:left, y:0}, {x:left, y:value}, {x:right, y:value}, {x:right, y:0}, {x:365, y:0}]; 
+            else
+                scattered = [ {x:0, y:value}, {x:right, y:value}, {x:right, y:0}, {x:left, y:0}, {x:left, y:value}, {x:365, y:value}]; 
+        }
 
         data_datasets.push({
             label: dataset.label,
@@ -120,7 +134,7 @@ function getScatterYearDaysGraph( datasets, canvas )
 
 function generateSpeciesStatDetail( card, speciesMap )
 {
-    let frame = 3*7;
+    let halfFrame = 14;
 
     const detail_div = document.getElementById("detail_div");
     detail_div.innerHTML = card.name + ' (' + card.lat_name + ')';
@@ -128,16 +142,14 @@ function generateSpeciesStatDetail( card, speciesMap )
     let deltaGraphCanvas = document.createElement("canvas");
     detail_div.appendChild( deltaGraphCanvas );
 
-    let obsNumInFrame = getEventsInFrameArray( card.observations, frame, true );
-    let obsNumInFrameShifted = [];
-    for(let i = 0; i<obsNumInFrame.length; i++)
-    {
-        obsNumInFrameShifted[i] = obsNumInFrame[ Math.trunc(365 + i - frame/2)%365 ];
-    }
+    const category = getCategory( card.observations );
+
+    let boxGraphs = category.boxes.map((box) => {return {label:'#', values: [box.left, box.right], interval:true, value:0.5, borderWidth:5};});
 
     getScatterYearDaysGraph( [
-        {label:'#', values: obsNumInFrameShifted, borderWidth:3},
-        {label:'#', values: getEventsInFrameArray( card.observations, 1, true )},
+        {label:'#', values: normalize(getMovingAverage( getObservationsPerDay(card.observations), halfFrame )), borderWidth:3},
+        {label:'#', values: normalize(getObservationsPerDay( card.observations ))},
+        ...boxGraphs,
     ], deltaGraphCanvas);
     
     let knownYears = getKnownYears( card, 2013 );
@@ -167,7 +179,7 @@ function generateSpeciesStatDetail( card, speciesMap )
 
             if(typeof yearChart !== "undefined") yearChart.destroy();
 
-            yearChart = getScatterYearDaysGraph( [{label:year, values: getEventsInFrameArray( card.observations, 1, false, year )}], deltaGraphCanvas2);
+            yearChart = getScatterYearDaysGraph( [{label:year, values: getObservationsPerDay( card.observations, year )}], deltaGraphCanvas2);
         });
         
         years_div.appendChild( span );
@@ -175,7 +187,6 @@ function generateSpeciesStatDetail( card, speciesMap )
         space.innerHTML = ' ';
         years_div.appendChild( space );
     });
-
 }
 
 function getLastKnownDate( speciesMap )
@@ -199,174 +210,271 @@ function getLastKnownDate( speciesMap )
     return last;
 }
 
-function countObservationsPerMonth( observations )
-{
-    let months = Array(12).fill(0);
-
-    observations.forEach((obs) =>
-    {
-        months[obs.time.getMonth()]++;
-    });
-
-    return months;
-}
-
-function countObservationsPerDay( observations )
-{
-    let days = Array(366).fill(0);
-
-    observations.forEach((obs) =>
-    {
-        days[Math.trunc(getDaysFrom1Jan(obs.time))]++;
-    });
-
-    return days;
-}
-
-function getMaxBox( values, targetTotal )
+function getDailyMaxBoxElement( values, averValues, halfFrame, targetTotal )
 {
     let length = values.length;
 
-    let maxMonth=0;
-    let maxMonthIdx=0;
+    let maxValue=0;
+    let maxValueIdx=0;
+    let minAverValue=averValues[0];
     for(let i=0; i<values.length; i++)
     {
-        if(values[i]>maxMonth)
+        if(values[i]>maxValue)
         {
-            maxMonth=values[i];
-            maxMonthIdx=i;
+            maxValue=values[i];
+            maxValueIdx=i;
+        }
+        if(averValues[i]<minAverValue)
+        {
+            minAverValue = averValues[i];
         }
     }
 
-    let rangeTotal=maxMonth;
-    let leftIndex=maxMonthIdx;
-    let rightIndex=maxMonthIdx;
+    let rangeTotal=maxValue;
+    let leftIndex=maxValueIdx;
+    let rightIndex=maxValueIdx;
 
-    function averageValue(index)
-    {
-        if(length<64) return values[index];
-        else
-        {
-            let aver = 0;
-            const halfFrame = 7;
-            for( let i=-halfFrame; i<=halfFrame; i++)
-            {
-                aver += values[(length + index + i)%length];                
-            }
-            return aver/(halfFrame*2+1);
-        }
-    }
-
-    while( rangeTotal < targetTotal )
-    {
-        let earlierIndex = (length + leftIndex - 1)%length;
-        let laterIndex   = (rightIndex + 1)%length;
-
-        let earlierValue = values[earlierIndex];
-        let laterValue = values[laterIndex];
-
-        let earlierValueAver = averageValue(earlierIndex);
-        let laterValueAver = averageValue(laterIndex);
-
-        let earlierDelta = maxMonthIdx-leftIndex;
-        let laterDelta = rightIndex-maxMonthIdx;
-
-        if(earlierValueAver > laterValueAver)
-        {
-            rangeTotal += earlierValue;
-            leftIndex--;
-        }
-        else if(earlierValueAver < laterValueAver)
-        {
-            rangeTotal += laterValue;
-            rightIndex++;
-        }
-         else if(earlierDelta > laterDelta)
-        {
-            rangeTotal += laterValue;
-            rightIndex++;
-        } else
-        {
-            rangeTotal += earlierValue;
-            leftIndex--;
-        }
-    }
-
-    // trim range
+    // extend range back
     while(1)
     {
-        let leftCorrectedIndex = (length + leftIndex)%length;
-        let rightCorrectedIndex = (rightIndex)%length;
+        if(rightIndex - leftIndex == length-1) break;
 
+        let leftCorrectedIndex = (length + leftIndex - 1)%length;
         let leftValue = values[leftCorrectedIndex];
+
+        if(averValues[leftCorrectedIndex] > 0.05)
+        {
+            rangeTotal += leftValue;
+            leftIndex--;
+        }
+        else break;
+    }
+    while(1)
+    {
+        if(rightIndex - leftIndex == length-1) break;
+
+        let rightCorrectedIndex = (length + rightIndex + 1)%length;
         let rightValue = values[rightCorrectedIndex];
 
-        if(leftValue > rightValue)
+        if(averValues[rightCorrectedIndex] > 0.05)
         {
-            if(rangeTotal - rightValue > targetTotal)
-            {
-                rangeTotal -= rightValue;
-                rightIndex--;
-            }
-            else
-            {
-                break;
-            }
+            rangeTotal += rightValue;
+            rightIndex++;
         }
-        else
-        {
-            if(rangeTotal - leftValue > targetTotal)
-            {
-                rangeTotal -= leftValue;
-                leftIndex++;
-            }
-            else
-            {
-                break;
-            }
-        }
+        else break;
     }
 
-    return {left:leftIndex, right:rightIndex};
+    while(1)
+    {
+        if(leftIndex == rightIndex) break;
+
+        let leftCorrectedIndex = (length + leftIndex + 1)%length;
+        let leftValue = values[leftCorrectedIndex];
+
+        if(values[leftCorrectedIndex]==0)
+        {
+            rangeTotal -= leftValue;
+            leftIndex++;
+        }
+        else break;
+    }
+    while(1)
+    {
+        if(leftIndex == rightIndex) break;
+
+        let rightCorrectedIndex = (length + rightIndex - 1)%length;
+        let rightValue = values[rightCorrectedIndex];
+
+        if(values[rightCorrectedIndex]==0)
+        {
+            rangeTotal -= rightValue;
+            rightIndex--;
+        }
+        else break;
+    }
+
+    return {left:leftIndex, right:rightIndex, rangeTotal:rangeTotal};
 }
+
+function forEachValueInBox( values, box, func )
+{
+    for(let i=0; i<values.length; i++)
+    {
+        let in_box = false;
+
+        in_box = in_box || (i >= box.left && i <= box.right);
+        in_box = in_box || (box.left<0 && i >= (box.left + values.length));
+        in_box = in_box || (box.right>=values.length && i <= (box.right - values.length));
+
+        if(in_box)
+        {
+            values[i] = func(values[i]);
+        }
+    }
+}
+
+function getDailyMaxBoxArray( events, targetTotal )
+{
+    const halfFrame = 14;
+
+    let values = getObservationsPerDay( events );
+    let averValues = normalize(getMovingAverage( values, halfFrame ));
+
+    let sum = 0;
+
+    values.forEach((value) => sum+=value);
+
+    let covered = 0;
+
+    let boxes = [];
+
+    while(covered < targetTotal && boxes.length < 4)
+    {
+        let box = getDailyMaxBoxElement( values, averValues, halfFrame, targetTotal );
+        covered += box.rangeTotal;
+
+        boxes.push(box);
+
+        forEachValueInBox( values, box, ()=>0);
+        forEachValueInBox( averValues, box, ()=>0);
+    }
+
+    return boxes;
+}
+
+let verbose = false;
+
+function joinBoxes( dayBoxes, observations )
+{
+    let values = getObservationsPerDay( observations );
+    const year_length = values.length;
+    while(1)
+    {
+        let changed=false;
+
+        for(let i=0; i<dayBoxes.length; i++)
+        {
+            for(let j=0; j<dayBoxes.length; j++)
+            {
+                if(i==j) continue;
+
+                let new_box;
+
+                let i_left = dayBoxes[i].left;
+                let j_left = dayBoxes[j].left;
+                let i_right = dayBoxes[i].right;
+                let j_right = dayBoxes[j].right;
+
+                if( j_left - i_right > 0 && j_left - i_right < 30 )
+                {
+                    // if there are several little boxes in the range of 30
+                    // some of them may get skipped
+                    new_box = {left:i_left, right:j_right};
+                }
+                else if( j_right >= year_length && i_left-(j_right-year_length) > 0  && i_left-(j_right-year_length) < 30)
+                {
+                    new_box = {left:j_left, right:i_right+year_length};
+                }
+                else if( i_left < 0 && (i_left+year_length)-j_right > 0  && (i_left+year_length)-j_right < 30)
+                {
+                    new_box = {left:j_left, right:i_right+year_length};
+                }
+
+                if(typeof new_box !== "undefined")
+                {
+                    new_box.rangeTotal = 0;
+
+                    forEachValueInBox( values, new_box, (val)=>{new_box.rangeTotal+=val; return val;});
+
+                    let new_boxes = [];
+
+                    new_boxes.push(new_box);
+                    dayBoxes.forEach( (val, index) => { if(index != i && index != j) new_boxes.push(val); } )
+                    dayBoxes = new_boxes;
+
+                    changed = true;
+                    break;
+                }
+            }
+
+            if(changed) break;
+        }
+
+        if(!changed) break;
+    } 
+
+    return dayBoxes;
+}
+
 
 function getCategory( observations )
 {
     if( observations.length < 50 )
     {
-        return {category:'.', monthsPresent:'.', fromText:'.', toText:'.'};
+        return {category:'.'};
     }
 
-    let totalPerMonth = countObservationsPerMonth( observations );
-    let totalPerDay   = countObservationsPerDay( observations );
-    
-    let box = getMaxBox( totalPerMonth, observations.length * 0.95 );
-    let leftIndex = box.left;
-    let rightIndex = box.right;
+    let dayBoxes = getDailyMaxBoxArray( observations, observations.length * 0.95 );
+    dayBoxes = joinBoxes( dayBoxes, observations );
+    dayBoxes.sort((a,b) => { if(a.rangeTotal > b.rangeTotal) return -1; else return +1; });
 
-    let dayBox = getMaxBox( totalPerDay, observations.length * 0.95 );
-    let leftDayIndex = dayBox.left;
-    let rightDayIndex = dayBox.right;
+    let firstRate = dayBoxes[0].rangeTotal/observations.length;
 
-    const Months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    let secondRate = 0;
+    if(dayBoxes.length>1) secondRate = dayBoxes[1].rangeTotal/observations.length;
+
+    let thirdRate = 0;
+    if(dayBoxes.length>2) thirdRate = dayBoxes[2].rangeTotal/observations.length;
+
+    let sumOfBoxesLengths = 0;
+    dayBoxes.forEach((box)=>{sumOfBoxesLengths += box.right-box.left});
 
     let category = '.';
-    if( rightIndex-leftIndex > 8 )
+    if( sumOfBoxesLengths > 366 - dayBoxes.length*45 )
     {
         category = 'All year';
+
+        if(dayBoxes.length>1)
+        {
+            category += ' almost';
+        }
     }
     else
     {
-        category = 'Migratory';
+        if(secondRate > 0.1 && (firstRate+secondRate)>0.8 && secondRate > thirdRate*2)
+        {
+            category = 'Passthrough';
+
+            if(firstRate+secondRate < 0.9 || dayBoxes.length>2)
+            {
+                category += ' probably';
+            }
+        }
+        else
+        {
+            category = 'Seasonal';
+
+            if(firstRate < 0.9)
+            {
+                category += ' noisy';
+            }
+        }
     }
 
-    return {category:category, monthsPresent:(rightIndex-leftIndex)+1, from: (12+leftIndex)%12, to: (rightIndex)%12,
-            fromDay: (365+dayBox.left)%365, toDay: (dayBox.right)%365, };
+    return {category:category, boxes: dayBoxes, };
 }
 
 function getExactArrivalIndex(year, category, timeline, getDateIndex)
 {
-    let firstGuess = new Date(year, category.from, 1);
+    if(typeof category.boxes === "undefined") return -2;
+
+    let boxes = category.boxes.toSorted((a,b) => {if(a.left > b.left) return +1; else return -1;});
+
+    let arrival_shift = (boxes[0].left + 366)%366;
+
+    let firstGuess = new Date(year,0,1);
+    firstGuess.setDate(firstGuess.getDate() + arrival_shift);
+
     let startSearchIdx = getDateIndex(firstGuess)-45;
     if(startSearchIdx < 0) return -1; // out of range
 
@@ -378,88 +486,51 @@ function getExactArrivalIndex(year, category, timeline, getDateIndex)
 
         return startSearchIdx + j;
     }
+
+    return -1;
 }
 
-function getStatArrivalIndex(year, category, timeline, getDateIndex)
+function getExactDepatureIndex(year, category, timeline, getDateIndex, timelineObs)
 {
-    let firstGuess = new Date(year, category.from, 1);
+    if(typeof category.boxes === "undefined") return -2;
+
+    let boxes = category.boxes.toSorted((a,b) => {if(a.left > b.left) return +1; else return -1;});
+    let lastBox = boxes[boxes.length-1];
+
+    let arrival_shift = (boxes[0].left + 366)%366;
+
+    let firstGuess = new Date(year,0,1);
+    firstGuess.setDate(firstGuess.getDate() + arrival_shift);
+    firstGuess.setDate(firstGuess.getDate() + (lastBox.right - boxes[0].left));
+
     let startSearchIdx = getDateIndex(firstGuess)-45;
+
     if(startSearchIdx < 0) return -1; // out of range
 
-    const frame = 7;
+    let zeroDaysCount = -1;
+    let searchDistance = 30*4;
 
-    let moving_average = Array(90).fill(0);
-    let data           = Array(90).fill(0);
-    for(let j=0; j<90; j++)
+    for(let i=0; i<searchDistance; i++)
     {
-        for(let k=0; k<frame; k++)
+        if(startSearchIdx + i> timeline.length) return -1; // can be made better
+
+        if( timeline[startSearchIdx + i] != 0 ) zeroDaysCount=0; else zeroDaysCount++;
+
+        if(zeroDaysCount == 45 && zeroDaysCount != i)
         {
-            if( startSearchIdx + j + k == timeline.length) break;
-            moving_average[j] += timeline[startSearchIdx + j + k];
-            data[j] = timeline[startSearchIdx + j];
+            return startSearchIdx + i - zeroDaysCount;
         }
     }
 
-    let average_target = Math.max(moving_average[0], 1) * 2;
-    for(let j=0; j<90; j++)
+    if(zeroDaysCount+1 != searchDistance) return -2;
+
+    for(let i=0; i<searchDistance; i++)
     {
-        if( moving_average[j] > average_target && timeline[startSearchIdx + j] > 0)
+        if(startSearchIdx - i < 0) return -1; // can be made better
+
+        if( timeline[startSearchIdx - i] != 0 )
         {
-            return startSearchIdx + j;
-        }
-    }
-
-    return -2; // noisy - unreliable result
-}
-
-function getExactDepatureIndex(arrivalIdx, category, timeline, getDateIndex)
-{
-    let minDuration      = Math.trunc((category.monthsPresent-1)*(365/12));
-    let extendedDuration = Math.trunc((category.monthsPresent+3)*(365/12));
-
-    let zeroDaysCount = 0;
-
-    for(let i=minDuration; i<extendedDuration; i++)
-    {
-        if(arrivalIdx + i> timeline.length) return -1; // can be made better
-
-        if( timeline[arrivalIdx+i] != 0 ) zeroDaysCount=0; else zeroDaysCount++;
-
-        if(zeroDaysCount == 45)
-        {
-            return arrivalIdx + i - zeroDaysCount;
-        }
-    }
-
-    return -2; // noisy - unreliable result
-}
-
-
-function getStatDepatureIndex(arrivalIdx, category, timeline, getDateIndex)
-{
-    if(arrivalIdx + 365 > timeline.length) return -1; // can be made better
-
-    let expectedDuration = (category.monthsPresent+2)*30;
-
-    let totalYear = 0;
-    let expectedTotal = 0;
-
-    for(let i=0; i<365; i++) totalYear += timeline[arrivalIdx+i];
-    for(let i=0; i<expectedDuration; i++) expectedTotal += timeline[arrivalIdx+i];
-
-    let currentTotal = 0;
-
-    for(let i=0; i<365; i++)
-    {
-        currentTotal += timeline[arrivalIdx+i];
-        if(currentTotal > expectedTotal * 0.95)
-        {
-            if(currentTotal < totalYear * 0.9)
-            {
-                return -1;
-            }
-
-            return arrivalIdx + i;
+            return startSearchIdx - i;
         }
     }
 
@@ -472,11 +543,15 @@ function generateMigrationStatsTable( speciesMap )
 
     const table_migratory = document.getElementById("table_migratory");
     table_migratory.innerHTML = '';
-    table_migratory.appendChild(createTr(['latin', 'common', 'observations', 'category', 'months present', 'from', 'to', 'fromDay', 'toDay', ...knownYears]));
+    table_migratory.appendChild(createTr(['latin', 'common', 'observations', 'category', 'from', 'to', ...knownYears]));
+
+    const table_passthrough = document.getElementById("table_passthrough");
+    table_passthrough.innerHTML = '';
+    table_passthrough.appendChild(createTr(['latin', 'common', 'observations', 'category', 'from', 'to', 'from', 'to', ...knownYears]));
 
     const table_allyear = document.getElementById("table_allyear");
     table_allyear.innerHTML = '';
-    table_allyear.appendChild(createTr(['latin', 'common', 'observations', 'category', 'months<br>with most<br>observations', 'from', 'to', 'fromDay', 'toDay']));
+    table_allyear.appendChild(createTr(['latin', 'common', 'observations', 'category', 'from', 'to']));
 
     const table_unknown = document.getElementById("table_unknown");
     table_unknown.innerHTML = '';
@@ -502,6 +577,14 @@ function generateMigrationStatsTable( speciesMap )
         return date;
     }
 
+    const Months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    function getDayStringFromIndex(index)
+    {
+        let date = getIndexDate(index);
+        return date.getDate()+' '+Months[date.getMonth()];
+    }
+
     speciesMap.forEach( (card, key) =>
     {
         let timelineObs = Array(lifetimeLength).fill(0);
@@ -513,7 +596,8 @@ function generateMigrationStatsTable( speciesMap )
         card.observations.forEach( (obs) =>
         {
             if(obs.time > beggining)
-            {                                  let i = getDateIndex(obs.time);
+            {
+                let i = getDateIndex(obs.time);
                 timeline[i]++;
                 timelineObs[i].push(obs);
 
@@ -523,7 +607,7 @@ function generateMigrationStatsTable( speciesMap )
 
         let category = getCategory( card.observations );
         
-        let arrivals  = Array(lifetimeYears).fill(-500);
+        let arrivals  = Array(lifetimeYears);
         let depatures = Array(lifetimeYears);
         let firstObservations = Array(lifetimeYears);
         let lastObservations = Array(lifetimeYears);
@@ -544,49 +628,27 @@ function generateMigrationStatsTable( speciesMap )
                 arrivals[i] = getIndexDate(arrivalIdx);
                 firstObservations[i] = timelineObs[arrivalIdx][0];
             }
-            else if(arrivalIdx == -2)
+
+            let depatureIdx = getExactDepatureIndex(firstYear+i, category, timeline, getDateIndex);
+
+            if(depatureIdx > 0)
             {
-                comment[i] == 'noisy';
-                arrivalIdx = getStatArrivalIndex(firstYear+i, category, timeline, getDateIndex);
-
-                if(arrivalIdx >= 0) arrivals[i] = getIndexDate(arrivalIdx);
+                depatures[i] = getIndexDate(depatureIdx);
+                lastObservations[i] = timelineObs[depatureIdx][0];
             }
-
-            let depatureIdx;
-
-            if(arrivalIdx >= 0)
-            {
-                depatureIdx = getExactDepatureIndex(arrivalIdx, category, timeline, getDateIndex);
-
-                if(depatureIdx > 0)
-                {
-                    depatures[i] = getIndexDate(depatureIdx);
-                    lastObservations[i] = timelineObs[depatureIdx][0];
-                }
-                else if(depatureIdx == -2)
-                {
-                    depatureIdx = getStatDepatureIndex(arrivalIdx, category, timeline, getDateIndex);
-
-                    if(depatureIdx >= 0) depatures[i] = getIndexDate(depatureIdx);
-                }
-            }
-
         }
 
         let year_cols = [];
-        const Months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-
-        function getDayStringFromIndex(index)
-        {
-            let date = getIndexDate(index);
-            return date.getDate()+' '+Months[date.getMonth()];
-        }
 
         for(let i=0; i<years.length; i++)
         {
-            if(arrivals[i] != -500)
+            let text = '';
+            let sort = 0;
+
+            if(typeof arrivals[i] !== "undefined" )
             {
-                let text = '';
+                sort = arrivals[i].valueOf();
+
                 if(typeof firstObservations[i] !== "undefined")
                 {
                     text += '<a href="'+ firstObservations[i].url +'">'+ arrivals[i].getDate() + ' ' + Months[arrivals[i].getMonth()] + '</a>';
@@ -595,50 +657,63 @@ function generateMigrationStatsTable( speciesMap )
                 {
                     text += '~'+ arrivals[i].getDate() + ' ' + Months[arrivals[i].getMonth()];
                 }
+            }
+            else text += '?';
 
-                text += '<br>';
 
-                if(typeof depatures[i] !== "undefined")
+            text += '<br>';
+
+            if(typeof depatures[i] !== "undefined")
+            {
+                if(typeof lastObservations[i] !== "undefined")
                 {
-                    if(typeof lastObservations[i] !== "undefined")
-                    {
-                        text += '<a href="'+ lastObservations[i].url +'">'+ depatures[i].getDate() + ' ' + Months[depatures[i].getMonth()] + '</a>';
-                    }
-                    else
-                    {
-                        text += '~'+ depatures[i].getDate() + ' ' + Months[depatures[i].getMonth()];
-                    }
+                    text += '<a href="'+ lastObservations[i].url +'">'+ depatures[i].getDate() + ' ' + Months[depatures[i].getMonth()] + '</a>';
                 }
                 else
                 {
-                    text += '?';
+                    text += '~'+ depatures[i].getDate() + ' ' + Months[depatures[i].getMonth()];
                 }
-
-                year_cols.push(['data-sorting',arrivals[i].valueOf(),text]);
             }
+            else text += '?';
+
+            if(text != '?<br>?') year_cols.push(['data-sorting',sort,text]);
             else year_cols.push(comment[i]);
         }
         
         let span = document.createElement("span");
 
         span.addEventListener("click", (event) => {
-            generateSpeciesStatDetail( card, speciesMap );
+            generateSpeciesStatDetail( card, speciesMap, category );
         });
 
         span.innerHTML = category.category;
 
-        let main_cols = [card.lat_name, card.name, card.total_observed, span, category.monthsPresent,
-                                         ['data-sorting',category.from,Months[category.from]],
-                                         ['data-sorting',category.to,Months[category.to]],
-                                         getDayStringFromIndex(category.fromDay),
-                                         getDayStringFromIndex(category.toDay)];
+        let main_cols = [card.lat_name, card.name, card.total_observed, span];
 
-        if(category.category == 'Migratory') table_migratory.appendChild(createTr([...main_cols, ...year_cols]));
-        else if(category.category == 'All year') table_allyear.appendChild(createTr([...main_cols]));
+        if(category.category.startsWith('Seasonal')) table_migratory.appendChild(createTr([...main_cols,
+            ['data-sorting',category.boxes[0].left,getDayStringFromIndex(category.boxes[0].left)],
+            ['data-sorting',category.boxes[0].right,getDayStringFromIndex(category.boxes[0].right)],
+            ...year_cols]));
+        else if(category.category.startsWith('Passthrough'))
+        {
+            let boxes = [category.boxes[0],category.boxes[1]].sort((a,b)=>{if(a.left > b.left) return +1; else return -1;});
+
+            table_passthrough.appendChild(createTr([...main_cols,
+                ['data-sorting',boxes[0].left,getDayStringFromIndex(boxes[0].left)],
+                ['data-sorting',boxes[0].right,getDayStringFromIndex(boxes[0].right)],
+                ['data-sorting',boxes[1].left,getDayStringFromIndex(boxes[1].left)],
+                ['data-sorting',boxes[1].right,getDayStringFromIndex(boxes[1].right)],
+                ...year_cols]));
+        }
+        else if(category.category.startsWith('All year')) table_allyear.appendChild(createTr([...main_cols,
+            ['data-sorting',category.boxes[0].left,getDayStringFromIndex(category.boxes[0].left)],
+            ['data-sorting',category.boxes[0].right,getDayStringFromIndex(category.boxes[0].right)],
+            ]));
         else table_unknown.appendChild(createTr([card.lat_name, card.name, card.total_observed]));
     } );
 
     addSorting( table_migratory, 1 );
+    addSorting( table_passthrough, 1 );
     addSorting( table_allyear, 1 );
     addSorting( table_unknown, 1 );
 }
