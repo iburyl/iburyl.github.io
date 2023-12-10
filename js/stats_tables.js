@@ -6,6 +6,18 @@ function getDaysFrom1Jan(time)
     return delta;
 }
 
+function getDayStringFromDayShift(index, year)
+{
+    if(typeof year === "undefined") year = 2000;
+
+    const Months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+    let date = new Date(year,0,1);
+    date.setDate(date.getDate() + index);
+
+    return date.getDate()+' '+Months[date.getMonth()];
+}
+
 function getKnownYears( card, startingFrom )
 {
     var knownYearsUnsorted = new Set();
@@ -71,138 +83,6 @@ function normalize(eventsPerDay)
     return eventsPerDay.map((el) => el/max)
 }
 
-function getScatterYearDaysGraph( datasets, canvas )
-{
-    let data_datasets = [];
-    datasets.forEach( (dataset) =>
-    {
-        let i = 0;
-        let scattered; 
-
-        if(typeof dataset.interval === "undefined" || dataset.interval == false)
-        {
-            scattered = dataset.values.map( (el) => { i++; return {x:i, y:el}; } );
-        }
-        else
-        {
-            let value = 1;
-            if(typeof dataset.value !== "undefined")
-            {
-                value = dataset.value;
-            }
-
-            let left  = (dataset.values[0] + 366)%366;
-            let right = (dataset.values[1])%366;
-            
-            if( left<=right )
-                scattered = [ {x:0, y:0}, {x:left, y:0}, {x:left, y:value}, {x:right, y:value}, {x:right, y:0}, {x:365, y:0}]; 
-            else
-                scattered = [ {x:0, y:value}, {x:right, y:value}, {x:right, y:0}, {x:left, y:0}, {x:left, y:value}, {x:365, y:value}]; 
-        }
-
-        data_datasets.push({
-            label: dataset.label,
-            data: scattered,
-            borderWidth: (typeof dataset.borderWidth === "undefined") ? 1 : dataset.borderWidth,
-            pointStyle : false,
-            showLine: true,
-        });
-    } );
-
-    let chart = new Chart(canvas,
-        {
-            type: 'scatter',
-            data: { datasets: data_datasets },
-            options: {
-              scales: {
-                x: {
-                    max: 365,
-                    ticks: {
-                        callback: function(label, index, labels) {
-                            const Months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                            
-                            return Months[index%12];
-                        },
-                         stepSize: 365/12
-                     },
-                }
-              },
-            }
-        });
-    return chart;
-}
-
-function generateSpeciesStatDetail( card, speciesMap, category, getDayStringFromIndex )
-{
-    let halfFrame = 14;
-
-    const detail_div = document.getElementById("detail_div");
-    detail_div.innerHTML = card.name + ' (' + card.lat_name + ')';
-
-    let deltaGraphCanvas = document.createElement("canvas");
-    detail_div.appendChild( deltaGraphCanvas );
-
-    let boxGraphs = category.boxes.map((box) => {return {label:'box', values: [box.left, box.right], interval:true, value:0.5, borderWidth:5};});
-
-    getScatterYearDaysGraph( [
-        {label:'average', values: normalize(getMovingAverage( getObservationsPerDay(card.observations), halfFrame )), borderWidth:3},
-        {label:'count', values: normalize(getObservationsPerDay( card.observations ))},
-        ...boxGraphs,
-    ], deltaGraphCanvas);
-    
-    let knownYears = getKnownYears( card, 2013 );
-
-    detail_div.appendChild( document.createElement("br") );
-    detail_div.appendChild( document.createElement("br") );
-
-    let table = document.createElement("table");
-    detail_div.appendChild(table);
-
-    detail_div.appendChild( document.createElement("br") );
-    detail_div.appendChild( document.createElement("br") );
-
-    let years_div = document.createElement("div");
-    detail_div.appendChild( years_div );
-
-    detail_div.appendChild( document.createElement("br") );
-    detail_div.appendChild( document.createElement("br") );
-
-    let deltaGraphCanvas2 = document.createElement("canvas");
-    detail_div.appendChild( deltaGraphCanvas2 );
-
-    table.appendChild(createTr(['from', 'to', 'length', 'count', 'ratio']));
-
-    let boxes = category.boxes.toSorted((a,b) => {if(a.left > b.left) return +1; else return -1;});
-    boxes.forEach((box) =>
-    {
-        let ratio = box.rangeTotal/card.observations.length;
-        ratio = Math.round(ratio*100)/100;
-        table.appendChild(createTr([getDayStringFromIndex(box.left), getDayStringFromIndex(box.right), box.right-box.left, box.rangeTotal, ratio]));
-    });
-
-    let yearChart;
-    
-    knownYears.forEach((year) =>
-    {
-        let span = document.createElement("span");
-        span.innerHTML = year;
-
-        span.addEventListener("click", (event) =>
-        {
-            event.preventDefault();
-
-            if(typeof yearChart !== "undefined") yearChart.destroy();
-
-            yearChart = getScatterYearDaysGraph( [{label:year, values: getObservationsPerDay( card.observations, year )}], deltaGraphCanvas2);
-        });
-        
-        years_div.appendChild( span );
-        let space = document.createElement("span");
-        space.innerHTML = ' ';
-        years_div.appendChild( space );
-    });
-}
-
 function getLastKnownDate( speciesMap )
 {
     let last;
@@ -228,25 +108,20 @@ function getDailyMaxBoxElement( values, averValues, halfFrame, targetTotal )
 {
     let length = values.length;
 
-    let maxValue=0;
-    let maxValueIdx=0;
-    let minAverValue=averValues[0];
-    for(let i=0; i<values.length; i++)
+    let maxAverValue=0;
+    let maxAverValueIdx=0;
+    for(let i=0; i<averValues.length; i++)
     {
-        if(values[i]>maxValue)
+        if(averValues[i]>maxAverValue)
         {
-            maxValue=values[i];
-            maxValueIdx=i;
-        }
-        if(averValues[i]<minAverValue)
-        {
-            minAverValue = averValues[i];
+            maxAverValue=averValues[i];
+            maxAverValueIdx=i;
         }
     }
 
-    let rangeTotal=maxValue;
-    let leftIndex=maxValueIdx;
-    let rightIndex=maxValueIdx;
+    let rangeTotal=values[maxAverValueIdx];
+    let leftIndex=maxAverValueIdx;
+    let rightIndex=maxAverValueIdx;
 
     // extend range back
     while(1)
@@ -363,9 +238,12 @@ function joinBoxes( dayBoxes, observations )
 {
     let values = getObservationsPerDay( observations );
     const year_length = values.length;
+
     while(1)
     {
         let changed=false;
+
+        if(verbose) console.log(dayBoxes);
 
         for(let i=0; i<dayBoxes.length; i++)
         {
@@ -386,14 +264,18 @@ function joinBoxes( dayBoxes, observations )
                     // some of them may get skipped
                     new_box = {left:i_left, right:j_right};
                 }
-                else if( j_right >= year_length && i_left-(j_right-year_length) > 0  && i_left-(j_right-year_length) < 30)
+                else if( j_right >= year_length && i_left-(j_right-year_length) >= 0  && i_left-(j_right-year_length) < 30)
                 {
                     new_box = {left:j_left, right:i_right+year_length};
                 }
-                else if( i_left < 0 && (i_left+year_length)-j_right > 0  && (i_left+year_length)-j_right < 30)
+                else if( i_left < 0 && (i_left+year_length)-j_right >= 0  && (i_left+year_length)-j_right < 30)
                 {
                     new_box = {left:j_left, right:i_right+year_length};
                 }
+
+                if(verbose) console.log([i,j, j_right >= year_length, i_left-(j_right-year_length)]);
+                if(verbose) console.log([i,j, i_left < 0, (i_left+year_length)-j_right]);
+
 
                 if(typeof new_box !== "undefined")
                 {
@@ -421,9 +303,10 @@ function joinBoxes( dayBoxes, observations )
     return dayBoxes;
 }
 
-
-function getCategory( observations )
+function getCategory( card )
 {
+    let observations = card.observations;
+
     if( observations.length < 50 )
     {
         return {category:'.'};
@@ -624,7 +507,7 @@ function generateMigrationStatsTable( speciesMap )
             }
         });
 
-        let category = getCategory( card.observations );
+        let category = getCategory( card );
         
         let arrivals  = Array(lifetimeYears);
         let depatures = Array(lifetimeYears);
@@ -702,7 +585,7 @@ function generateMigrationStatsTable( speciesMap )
         let span = document.createElement("span");
 
         span.addEventListener("click", (event) => {
-            generateSpeciesStatDetail( card, speciesMap, category, getDayStringFromIndex );
+            generateSpeciesStatDetail( card );
         });
 
         span.innerHTML = category.category;
@@ -710,23 +593,23 @@ function generateMigrationStatsTable( speciesMap )
         let main_cols = [card.lat_name, card.name, card.total_observed, span];
 
         if(category.category.startsWith('Seasonal')) table_migratory.appendChild(createTr([...main_cols,
-            ['data-sorting',category.boxes[0].left,getDayStringFromIndex(category.boxes[0].left)],
-            ['data-sorting',category.boxes[0].right,getDayStringFromIndex(category.boxes[0].right)],
+            ['data-sorting',category.boxes[0].left,getDayStringFromDayShift(category.boxes[0].left)],
+            ['data-sorting',category.boxes[0].right,getDayStringFromDayShift(category.boxes[0].right)],
             ...year_cols]));
         else if(category.category.startsWith('Passthrough'))
         {
             let boxes = [category.boxes[0],category.boxes[1]].sort((a,b)=>{if(a.left > b.left) return +1; else return -1;});
 
             table_passthrough.appendChild(createTr([...main_cols,
-                ['data-sorting',boxes[0].left,getDayStringFromIndex(boxes[0].left)],
-                ['data-sorting',boxes[0].right,getDayStringFromIndex(boxes[0].right)],
-                ['data-sorting',boxes[1].left,getDayStringFromIndex(boxes[1].left)],
-                ['data-sorting',boxes[1].right,getDayStringFromIndex(boxes[1].right)],
+                ['data-sorting',boxes[0].left,getDayStringFromDayShift(boxes[0].left)],
+                ['data-sorting',boxes[0].right,getDayStringFromDayShift(boxes[0].right)],
+                ['data-sorting',boxes[1].left,getDayStringFromDayShift(boxes[1].left)],
+                ['data-sorting',boxes[1].right,getDayStringFromDayShift(boxes[1].right)],
                 ...year_cols]));
         }
         else if(category.category.startsWith('All year')) table_allyear.appendChild(createTr([...main_cols,
-            ['data-sorting',category.boxes[0].left,getDayStringFromIndex(category.boxes[0].left)],
-            ['data-sorting',category.boxes[0].right,getDayStringFromIndex(category.boxes[0].right)],
+            ['data-sorting',category.boxes[0].left,getDayStringFromDayShift(category.boxes[0].left)],
+            ['data-sorting',category.boxes[0].right,getDayStringFromDayShift(category.boxes[0].right)],
             ]));
         else table_unknown.appendChild(createTr([card.lat_name, card.name, card.total_observed]));
     } );

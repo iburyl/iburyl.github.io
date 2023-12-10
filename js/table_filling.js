@@ -4,7 +4,7 @@ function getCardTdSummary( card )
     let lat_name = document.createElement("span");
 
     lat_name.addEventListener("click", (event) => {
-        generateSpeciesDetail( card );
+        generateSpeciesStatDetail( card );
     });
 
     lat_name.innerHTML = card.lat_name;
