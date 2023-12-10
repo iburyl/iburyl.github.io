@@ -27,6 +27,30 @@
      </td>
    </tr>
    <tr>
+     <td>
+     </td>
+     <td align="center">
+      Filter:
+      <select name="months" id="monthsSelect">
+       <option value="-1">all months</option>
+       <option value="0">Jan</option>
+       <option value="1">Feb</option>
+       <option value="2">Mar</option>
+       <option value="3">Apr</option>
+       <option value="4">May</option>
+       <option value="5">Jun</option>
+       <option value="6">Jul</option>
+       <option value="7">Aug</option>
+       <option value="8">Sep</option>
+       <option value="9">Oct</option>
+       <option value="10">Nov</option>
+       <option value="11">Dec</option>
+      </select>
+     </td>
+     <td>
+     </td>
+   </tr>
+   <tr>
      <td align="center">
       <input type="submit" name="main" value="New species by year report" />
      </td>
@@ -87,6 +111,8 @@ iNats CSV files are compatible with Checklist format, but only single column is 
 const myForm = document.getElementById("myForm");
 const csvFile = document.getElementById("csvFile");
 const csvFileCompare = document.getElementById("csvFileCompare");
+const monthsFilter = document.getElementById("monthsSelect");
+
 myForm.addEventListener("submit", function (e) {
    e.preventDefault();
    const button_name = e.submitter.getAttribute("name");
@@ -112,7 +138,9 @@ myForm.addEventListener("submit", function (e) {
             const compare_observations = CSV2Observations(compare_string_csv);
             const compare_speciesMap = Observations2SpeciesMap(compare_observations);
      
-            generateSpeciesSummaryTable( speciesMap, compare_speciesMap );
+            let filter = monthsFilter.value;
+
+            generateSpeciesSummaryTable( speciesMap, compare_speciesMap, filter );
          };
          reader.readAsText(compare_input);
       }

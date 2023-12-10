@@ -132,7 +132,7 @@ function getScatterYearDaysGraph( datasets, canvas )
     return chart;
 }
 
-function generateSpeciesStatDetail( card, speciesMap )
+function generateSpeciesStatDetail( card, speciesMap, category, getDayStringFromIndex )
 {
     let halfFrame = 14;
 
@@ -142,17 +142,21 @@ function generateSpeciesStatDetail( card, speciesMap )
     let deltaGraphCanvas = document.createElement("canvas");
     detail_div.appendChild( deltaGraphCanvas );
 
-    const category = getCategory( card.observations );
-
-    let boxGraphs = category.boxes.map((box) => {return {label:'#', values: [box.left, box.right], interval:true, value:0.5, borderWidth:5};});
+    let boxGraphs = category.boxes.map((box) => {return {label:'box', values: [box.left, box.right], interval:true, value:0.5, borderWidth:5};});
 
     getScatterYearDaysGraph( [
-        {label:'#', values: normalize(getMovingAverage( getObservationsPerDay(card.observations), halfFrame )), borderWidth:3},
-        {label:'#', values: normalize(getObservationsPerDay( card.observations ))},
+        {label:'average', values: normalize(getMovingAverage( getObservationsPerDay(card.observations), halfFrame )), borderWidth:3},
+        {label:'count', values: normalize(getObservationsPerDay( card.observations ))},
         ...boxGraphs,
     ], deltaGraphCanvas);
     
     let knownYears = getKnownYears( card, 2013 );
+
+    detail_div.appendChild( document.createElement("br") );
+    detail_div.appendChild( document.createElement("br") );
+
+    let table = document.createElement("table");
+    detail_div.appendChild(table);
 
     detail_div.appendChild( document.createElement("br") );
     detail_div.appendChild( document.createElement("br") );
@@ -165,6 +169,16 @@ function generateSpeciesStatDetail( card, speciesMap )
 
     let deltaGraphCanvas2 = document.createElement("canvas");
     detail_div.appendChild( deltaGraphCanvas2 );
+
+    table.appendChild(createTr(['from', 'to', 'length', 'count', 'ratio']));
+
+    let boxes = category.boxes.toSorted((a,b) => {if(a.left > b.left) return +1; else return -1;});
+    boxes.forEach((box) =>
+    {
+        let ratio = box.rangeTotal/card.observations.length;
+        ratio = Math.round(ratio*100)/100;
+        table.appendChild(createTr([getDayStringFromIndex(box.left), getDayStringFromIndex(box.right), box.right-box.left, box.rangeTotal, ratio]));
+    });
 
     let yearChart;
     
@@ -336,7 +350,8 @@ function getDailyMaxBoxArray( events, targetTotal )
         boxes.push(box);
 
         forEachValueInBox( values, box, ()=>0);
-        forEachValueInBox( averValues, box, ()=>0);
+        averValues = normalize(getMovingAverage( values, halfFrame ));
+        //forEachValueInBox( averValues, box, ()=>0);
     }
 
     return boxes;
@@ -454,7 +469,11 @@ function getCategory( observations )
         {
             category = 'Seasonal';
 
-            if(firstRate < 0.9)
+            if(firstRate < 0.9 /* || secondRate>0.025*/)
+            {
+                category += ' rough';
+            }
+            else if(dayBoxes.length > 1)
             {
                 category += ' noisy';
             }
@@ -490,7 +509,7 @@ function getExactArrivalIndex(year, category, timeline, getDateIndex)
     return -1;
 }
 
-function getExactDepatureIndex(year, category, timeline, getDateIndex, timelineObs)
+function getExactDepatureIndex(year, category, timeline, getDateIndex, card)
 {
     if(typeof category.boxes === "undefined") return -2;
 
@@ -629,7 +648,7 @@ function generateMigrationStatsTable( speciesMap )
                 firstObservations[i] = timelineObs[arrivalIdx][0];
             }
 
-            let depatureIdx = getExactDepatureIndex(firstYear+i, category, timeline, getDateIndex);
+            let depatureIdx = getExactDepatureIndex(firstYear+i, category, timeline, getDateIndex, card);
 
             if(depatureIdx > 0)
             {
@@ -683,7 +702,7 @@ function generateMigrationStatsTable( speciesMap )
         let span = document.createElement("span");
 
         span.addEventListener("click", (event) => {
-            generateSpeciesStatDetail( card, speciesMap, category );
+            generateSpeciesStatDetail( card, speciesMap, category, getDayStringFromIndex );
         });
 
         span.innerHTML = category.category;

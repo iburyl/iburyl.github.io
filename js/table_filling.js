@@ -1,64 +1,3 @@
-function createTr(tdArray, trClass) {
-  let tr = document.createElement("tr");
-
-  if(typeof trClass !== "undefined")
-  {
-    tr.setAttribute('class', trClass);
-  }
-
-  for (var i = 0; i < tdArray.length; i++) {
-      let td = document.createElement("td");
-      
-      if( tdArray[i] instanceof HTMLElement )
-      {
-          td.appendChild( tdArray[i] );
-      }
-      else if( Array.isArray(tdArray[i]) )
-      {
-          td.setAttribute(tdArray[i][0], tdArray[i][1]);
-
-          if( tdArray[i][2] instanceof HTMLElement )
-          {
-            td.appendChild( tdArray[i][2] );
-          }
-          else
-          {
-            td.innerHTML = tdArray[i][2];
-          }
-      }
-      else
-      {
-          td.innerHTML = tdArray[i];
-      }
-      
-      tr.appendChild( td );
-  }
-
-  return tr;
-}
-
-function addSorting( table, headerRowNum )
-{
-    // Column sorting block
-    const getCellValue = (tr, idx) => {
-        let data = tr.children[idx].getAttribute('data-sorting');
-        if(data !== null && data !== '') return data;
-        return tr.children[idx].innerText || tr.children[idx].textContent;
-    };
-
-    const comparer = (idx, asc) => (a, b) => ((v1, v2) => 
-        v1 !== '' && v2 !== '' && !isNaN(v1) && !isNaN(v2) ? v1 - v2 : v1.toString().localeCompare(v2)
-        )(getCellValue(asc ? a : b, idx), getCellValue(asc ? b : a, idx));
-
-    // do the work...
-    table.querySelector('tr:nth-child('+headerRowNum+')').querySelectorAll('td').forEach(td => td.addEventListener('click', (() =>
-    {
-        Array.from(table.querySelectorAll('tr:nth-child(n+'+(headerRowNum+1)+')'))
-            .sort(comparer(Array.from(td.parentNode.children).indexOf(td), this.asc = !this.asc))
-            .forEach(tr => table.appendChild(tr) );
-    })));
-}
-
 function getCardTdSummary( card )
 {
     let name = card.name;
@@ -107,7 +46,8 @@ function getObsTdSummary( obs )
         let href = `<a href='${url}'>link</a>`;
         let user = obs.user_id;
         let year = obs.time.getFullYear();
-        return [year,href,user];
+        let date = obs.time.getFullYear()+'-'+(obs.time.getMonth()+1)+'-'+obs.time.getDate();
+        return [date,href,user];
     }
     else
     {
@@ -138,14 +78,14 @@ function generateYearsTable( speciesMap )
         const table_years = document.getElementById("table_years");
         table_years.innerHTML = '';
 
-        table_years.appendChild(createTr(
-                   [['rowspan',2,'year'], ['colspan',2,'number of species'], ['colspan',2,'names'], ['colspan',4,'all years'],
-                    ['colspan',2,'first observation'],
-                    ['colspan',3,'first research grade if different']]));
-
-        table_years.appendChild(createTr(
-                   ['cumulative', 'this year', 'common', 'latin (clickable)', 'obs', 'rsch','ssps', 'freq',
-                    'ref', 'user', 'year', 'ref', 'user']));
+        table_years.appendChild(createThead(
+            [createTr(
+                   [['rowspan',2,'year'], ['colspan',2,'number of species'], ['colspan',2,'names'], ['colspan',3,'all years'],
+                    ['colspan',3,'first observation'],
+                    ['colspan',3,'first research grade if different']]),
+             createTr(
+                   ['cumulative', 'this year', 'common', 'latin (clickable)', 'obs', 'rsch','ssps', 'date',
+                    'ref', 'user', 'date', 'ref', 'user'])]));
 
         let cumulative = 0;
         speciesYearsMapSorted.forEach( (cards, year) =>
@@ -154,13 +94,15 @@ function generateYearsTable( speciesMap )
 
             let first = true;
 
+            cards.sort((a,b) => {if(a.first_observed.time > b.first_observed.time) return +1; else return -1;});
+
             cards.forEach( (card) => 
             {
                 let tdFirstObserved = getObsTdSummary( card.first_observed );
                 let tdFirstResearch = getObsTdSummary( card.first_research );
                 if( tdFirstObserved[1] == tdFirstResearch[1] ) tdFirstResearch = ['&larr;','',''];
 
-                let tdFileds = [...getCardTdSummary( card ), ...tdFirstObserved.splice(1), ...tdFirstResearch ];
+                let tdFileds = [...getCardTdSummary( card ).slice(0,-1), ...tdFirstObserved /*.splice(1)*/, ...tdFirstResearch ];
                 
                 if(first)
                 {
@@ -176,8 +118,20 @@ function generateYearsTable( speciesMap )
     }
 }
 
-function generateSpeciesSummaryTable( speciesMap, compareSpeciesMap )
+function generateSpeciesSummaryTable( speciesMap, compareSpeciesMap, monthsFilter )
 {
+    if(monthsFilter!= -1)
+    {
+        speciesMap.forEach((card) =>
+        {
+            card.observations = card.observations.filter((obs) => obs.time.getMonth() == monthsFilter);
+            card.total_observed = card.observations.length;
+
+            card.total_research = 0;
+            card.observations.forEach((obs) => {if(obs.is_research) card.total_research++;})
+        });
+    }
+
     const speciesMapSorted = new Map([...speciesMap].sort((a, b) => {
         if( a[1].total_observed > b[1].total_observed ) return -1;
         if( a[1].total_observed < b[1].total_observed ) return  1;
