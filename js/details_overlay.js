@@ -5,7 +5,24 @@ function generateSpeciesStatDetail( card )
     let category = getCategory( card );
 
     const detail_div = document.getElementById("detail_div");
-    detail_div.innerHTML = card.name + ' (' + card.lat_name + ')';
+    detail_div.innerHTML = '';
+
+    let title = document.createElement("div");
+    let name = document.createElement("div");
+    let close = document.createElement("div");
+    title.appendChild( name );
+    title.appendChild( close );
+    detail_div.appendChild( title );
+    title.setAttribute('class', 'title');
+    name.setAttribute('class', 'name');
+    name.innerHTML = card.name + ' (' + card.lat_name + ')';
+    close.innerHTML = '[x]';
+
+    close.addEventListener("click", (event) =>
+    {
+        event.preventDefault();
+        detail_div.innerHTML = '';
+    });
 
     let deltaGraphCanvas = document.createElement("canvas");
     detail_div.appendChild( deltaGraphCanvas );

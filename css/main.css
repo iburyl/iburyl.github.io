@@ -14,6 +14,22 @@ div#detail_div {
   position: fixed;
   top: 0;
   right: 0;
+  width: 500px;
+  background-color: white;
+}
+
+div#detail_div div.title{
+  white-space:nowrap;
+  width: 100%;
+  display: flex;
+}
+
+div#detail_div div.title div{
+  white-space:nowrap;
+}
+
+div#detail_div div.title div.name{
+  width: 100%;
 }
 
 div#detail_div canvas {

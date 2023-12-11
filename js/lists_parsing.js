@@ -5,7 +5,7 @@ function CSV2Observations(string)
     var headers = CSVarrays[0];
     CSVarrays.shift();
 
-    const knownHeaderName = [ "user_login",  "url", "time_observed_at", "scientific_name", "common_name", "quality_grade", "observed_on", "id", "latitude", "longitude"];
+    const knownHeaderName = [ "user_login",  "url", "time_observed_at", "scientific_name", "common_name", "quality_grade", "observed_on", "id", "latitude", "longitude", "created_at"];
     let   knownHeaderIdx  = [];
     
     for (let i = 0; i < headers.length; i++) {
@@ -25,6 +25,7 @@ function CSV2Observations(string)
     const i_id           =knownHeaderIdx[7];
     const i_geo_lat      =knownHeaderIdx[8];
     const i_geo_long     =knownHeaderIdx[9];
+    const i_time_uploaded=knownHeaderIdx[10];
     console.log(knownHeaderIdx);
 
     let observations = [];
@@ -90,6 +91,7 @@ function CSV2Observations(string)
             lat_name_sp: lat_name,
             lat_name: values[i_lat_name],
             time: observed_time,
+            upload_time: new Date(values[i_time_uploaded]),
             url: values[i_url],
             is_research: is_research,
             is_ssp: is_ssp,
@@ -187,13 +189,14 @@ function Observations2SpeciesMap(observations)
             card.name = obs.name;
         }
 
+        let time = obs.time;
         
-        if( obs.time < card.first_observed.time )
+        if( time < card.first_observed.time )
         {
             card.first_observed = obs;
         }
 
-        if( obs.time > card.last_observed.time )
+        if( time > card.last_observed.time )
         {
             card.last_observed = obs;
         }
