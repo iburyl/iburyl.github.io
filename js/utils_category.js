@@ -203,7 +203,7 @@ function getCategory( card )
 
     if( observations.length < 10 )
     {
-        return {category:'.'};
+        return {category:'no data'};
     }
 
     let dayBoxes = getDailyMaxBoxArray( observations, observations.length * 0.95 );
@@ -221,7 +221,7 @@ function getCategory( card )
     let sumOfBoxesLengths = 0;
     dayBoxes.forEach((box)=>{sumOfBoxesLengths += box.right-box.left});
 
-    let category = '.';
+    let category = 'unclear';
     if( observations.length < 50 && dayBoxes.length>1)
     {
     }

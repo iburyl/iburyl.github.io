@@ -89,7 +89,7 @@ function generateMigrationStatsTable( speciesMap )
 
     const table_unknown = document.getElementById("table_unknown");
     table_unknown.innerHTML = '';
-    table_unknown.appendChild(createTr(['latin', 'common', 'observations']));
+    table_unknown.appendChild(createTr(['latin', 'common', 'observations', 'category']));
 
     const firstYear = knownYears[0];
     const now = new Date();
@@ -242,7 +242,7 @@ function generateMigrationStatsTable( speciesMap )
             ['data-sorting',category.boxes[0].left,getDayStringFromDayShift(category.boxes[0].left)],
             ['data-sorting',category.boxes[0].right,getDayStringFromDayShift(category.boxes[0].right)],
             ]));
-        else table_unknown.appendChild(createTr([card.lat_name, card.name, card.total_observed]));
+        else table_unknown.appendChild(createTr(main_cols));
     } );
 
     addSorting( table_migratory, 1 );
