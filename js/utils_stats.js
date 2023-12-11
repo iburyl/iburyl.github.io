@@ -82,26 +82,3 @@ function normalize(eventsPerDay)
     let max = Math.max(...eventsPerDay);
     return eventsPerDay.map((el) => el/max)
 }
-
-function getLastKnownDate( speciesMap )
-{
-    let last;
-    
-    var knownYearsUnsorted = new Set();
-
-    speciesMap.forEach( (card, key) =>
-    {
-        card.observations.forEach( (obs) =>
-        {
-            if(typeof last === "undefined") last = obs.time;
-            else
-            {
-                if(last - obs.time < 0) last = obs.time;
-            }
-        });
-    } );
-
-    return last;
-}
-
-

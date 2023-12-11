@@ -4,26 +4,6 @@ async function fetchAsync (url) {
     return data;
 };
 
-function mapReplacer(key, value) {
-  if(value instanceof Map) {
-    return {
-      dataType: 'Map',
-      value: Array.from(value.entries()), // or with spread: value: [...value]
-    };
-  } else {
-    return value;
-  }
-}
-
-function mapReviver(key, value) {
-  if(typeof value === 'object' && value !== null) {
-    if (value.dataType === 'Map') {
-      return new Map(value.value);
-    }
-  }
-  return value;
-}
-
 function createThead(trArray) {
   let thead = document.createElement("thead");
   trArray.forEach((tr) => thead.appendChild(tr));

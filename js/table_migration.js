@@ -94,7 +94,6 @@ function generateMigrationStatsTable( speciesMap )
     const firstYear = knownYears[0];
     const now = new Date();
     const beggining = new Date(Date.UTC(firstYear));
-    const lastKnownDate = getLastKnownDate(speciesMap);
     const ticksPerDay = 1000 * 60 * 60 * 24;
     const lifetimeLength = Math.trunc((now-beggining)/ticksPerDay) + 1;
     const lifetimeYears = now.getFullYear() - firstYear + 1;
