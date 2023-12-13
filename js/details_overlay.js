@@ -3,6 +3,7 @@ function generateSpeciesStatDetail( card )
     let halfFrame = 14;
 
     let category = getCategory( card );
+    let category_raw_boxes = getCategory( card, false );
 
     const detail_div = document.getElementById("detail_div");
     detail_div.innerHTML = '';
@@ -51,30 +52,46 @@ function generateSpeciesStatDetail( card )
     let additional_chart_canvas = document.createElement("canvas");
     detail_div.appendChild( additional_chart_canvas );
 
-    let boxGraphs = [];
+    let boxGraphs   = [];
+    let boxGraphsRaw= [];
 
     if(typeof category.boxes !== "undefined")
     {
-        boxGraphs = category.boxes.map((box) => {return {label:'box', values: [box.left, box.right], interval:true, value:0.5, borderWidth:5};});
+        boxGraphs    = category          .boxes.map((box) => {return {label:'box', values: [box.left, box.right], interval:true, value:0.5, borderWidth:5};});
+        boxGraphsRaw = category_raw_boxes.boxes.map((box) => {return {label:'box', values: [box.left, box.right], interval:true, value:0.25, borderWidth:3};});
     }
 
     getScatterYearDaysGraph( [
         {label:'average', values: normalize(getMovingAverage( getObservationsPerDay(card.observations), halfFrame )), borderWidth:3},
         {label:'count', values: normalize(getObservationsPerDay( card.observations ))},
-        ...boxGraphs,
+        ...boxGraphs, ...boxGraphsRaw,
     ], deltaGraphCanvas);
     
     if(typeof category.boxes !== "undefined")
     {
         table.appendChild(createTr(['from', 'to', 'length', 'count', 'ratio']));
 
-        let boxes = category.boxes.toSorted((a,b) => {if(a.left > b.left) return +1; else return -1;});
-        boxes.forEach((box) =>
+        function addBoxes(boxes)
         {
-            let ratio = box.rangeTotal/card.observations.length;
-            ratio = Math.round(ratio*100)/100;
-            table.appendChild(createTr([getDayStringFromDayShift(box.left), getDayStringFromDayShift(box.right), box.right-box.left, box.rangeTotal, ratio]));
-        });
+            boxes.forEach((box) =>
+            {
+                let ratio = box.rangeTotal/card.observations.length;
+                ratio = Math.round(ratio*100)/100;
+                table.appendChild(createTr([getDayStringFromDayShift(box.left), getDayStringFromDayShift(box.right), box.right-box.left, box.rangeTotal, ratio]));
+            });
+        }
+        
+
+        addBoxes( category.boxes.toSorted((a,b) => {if(a.left > b.left) return +1; else return -1;}) );
+        
+
+        if(category.boxes.length != category_raw_boxes.boxes.length)
+        {
+            table.appendChild(createTr(['', '', '', '', '']));
+
+            addBoxes( category_raw_boxes.boxes.toSorted((a,b) => {if(a.left > b.left) return +1; else return -1;}) );
+        }
+
     }
 
     let additionalChart;

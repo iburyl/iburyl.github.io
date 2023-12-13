@@ -197,7 +197,7 @@ function joinBoxes( dayBoxes, observations )
     return dayBoxes;
 }
 
-function getCategory( card )
+function getCategory( card, do_join_boxes=true)
 {
     let observations = card.observations;
 
@@ -207,7 +207,13 @@ function getCategory( card )
     }
 
     let dayBoxes = getDailyMaxBoxArray( observations, observations.length * 0.95 );
-    dayBoxes = joinBoxes( dayBoxes, observations );
+
+    let length_before_join = dayBoxes.length;
+    if(do_join_boxes)
+    {
+        dayBoxes = joinBoxes( dayBoxes, observations );
+    }
+
     dayBoxes.sort((a,b) => { if(a.rangeTotal > b.rangeTotal) return -1; else return +1; });
 
     let firstRate = dayBoxes[0].rangeTotal/observations.length;
@@ -254,6 +260,10 @@ function getCategory( card )
         else if(dayBoxes.length > 1)
         {
             category += ' noisy';
+        }
+        else if(length_before_join > 1)
+        {
+            category += ' *';
         }
     }
 
