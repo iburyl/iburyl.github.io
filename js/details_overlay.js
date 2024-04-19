@@ -52,6 +52,10 @@ function generateSpeciesStatDetail( card )
     let additional_chart_canvas = document.createElement("canvas");
     detail_div.appendChild( additional_chart_canvas );
 
+
+    let hours_div = document.createElement("div");
+    detail_div.appendChild( hours_div );
+
     let boxGraphs   = [];
     let boxGraphsRaw= [];
 
@@ -161,4 +165,59 @@ function generateSpeciesStatDetail( card )
               });
             });
     }
+
+    {
+        hours_div.innerHTML = 'per hour distribution';
+
+        let hours = [
+            0,0,0, 0,0,0,
+            0,0,0, 0,0,0,
+            0,0,0, 0,0,0,
+            0,0,0, 0,0,0, ];
+        let hours_scaled = [];
+
+        card.observations.forEach(( obs ) => 
+        {
+            let hour = obs.time.getHours();
+            hours[hour] = hours[hour]+1;
+        } );
+
+
+        for(let i=0; i<24; i++)
+        {
+            hours_scaled[i] = hours[i]/global_per_hour_observations[i];
+        }
+
+        let max_scaled = Math.max(...hours_scaled);
+        let max_abs    = Math.max(...hours);
+
+        for(let i=0; i<24; i++)
+        {
+            hours_scaled[i] /= max_scaled;
+            hours[i] /= max_abs;
+        }
+
+        let hoursGraphCanvas = document.createElement("canvas");
+        hours_div.appendChild( hoursGraphCanvas );
+
+        let chart = new Chart(hoursGraphCanvas,
+        {
+            type: 'bar',
+            data: {
+                labels: [ 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,
+                         12,13,14,15,16,17,18,19,20,21,22,23,],
+                datasets: [
+                    { label: 'abs', data: hours,},
+                    { label: 'scaled', data: hours_scaled,}
+                ]
+            },
+            options: {
+              scales: {
+                y: { beginAtZero: true }
+              },
+            }
+        });
+        
+    }
+
 }

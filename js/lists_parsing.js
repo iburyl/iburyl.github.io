@@ -1,3 +1,9 @@
+let global_per_hour_observations = [
+    0,0,0, 0,0,0,
+    0,0,0, 0,0,0,
+    0,0,0, 0,0,0,
+    0,0,0, 0,0,0, ];
+
 function CSV2Observations(string)
 {
     const CSVarrays = CSVToArray(string);
@@ -49,6 +55,8 @@ function CSV2Observations(string)
         {
             continue;
         }
+
+        global_per_hour_observations[observed_time.getHours()]++;
 
         if(values.length == 1)
         {
