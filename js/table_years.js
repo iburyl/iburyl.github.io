@@ -1,5 +1,8 @@
-function generateYearsTable( speciesMap, showUploadTime)
+async function generateYearsTable( speciesMap, showUploadTime)
 {
+    let taxIdMapCache = await getTaxIdMapCache();
+    let taxLatNameMapCache = taxIdMap2taxLatNameMap(taxIdMapCache);
+
     if(typeof showUploadTime=== "undefined") showUploadTime=false;
 
     const speciesYearsMap = new Map();
@@ -24,12 +27,12 @@ function generateYearsTable( speciesMap, showUploadTime)
 
         table_years.appendChild(createThead(
             [createTr(
-                   [['rowspan',2,'year'], ['colspan',2,'number of species'], ['colspan',2,'names'], ['colspan',3,'all years'],
+                   [['rowspan',2,'year'], ['colspan',2,'number of species'], ['colspan',4,'tax'], ['colspan',3,'names'], ['colspan',3,'all years'],
                     ['colspan',3,'first observation'],
                     ['colspan',3,'first research grade if different']]),
              createTr(
-                   ['cumulative', 'this year', 'common', 'latin (clickable)', 'obs', 'rsch','ssps', 'date',
-                    'ref', 'user', 'date', 'ref', 'user'])]));
+                   ['cumulative', 'this year', 'kingdom','class','order','family','english','common', 'latin (clickable)', 'obs', 'rsch','ssps',
+                    'date', 'ref', 'user', 'date', 'ref', 'user'])]));
 
         let cumulative = 0;
         speciesYearsMapSorted.forEach( (cards, year) =>
@@ -42,11 +45,19 @@ function generateYearsTable( speciesMap, showUploadTime)
 
             cards.forEach( (card) => 
             {
+                let taxDetail = [getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan()];
+                let main_inat_card = fillMainTaxDetails(card.lat_name, taxDetail, taxLatNameMapCache, taxIdMapCache);
+                if(typeof main_inat_card !== "undefined")
+                {
+                    fillAncestorTaxDetails(main_inat_card, taxDetail, taxIdMapCache);
+                }
+
                 let tdFirstObserved = getObsTdSummary( card.first_observed, showUploadTime );
                 let tdFirstResearch = getObsTdSummary( card.first_research, showUploadTime );
                 if( tdFirstObserved[1] == tdFirstResearch[1] ) tdFirstResearch = ['&larr;','',''];
 
-                let tdFileds = [...getCardTdSummary( card ).slice(0,-1), ...tdFirstObserved /*.splice(1)*/, ...tdFirstResearch ];
+                let tdFileds = [taxDetail[0].innerHTML, taxDetail[1].innerHTML, taxDetail[2].innerHTML, taxDetail[3].innerHTML, taxDetail[5].innerHTML,
+                                ...getCardTdSummary( card ).slice(0,-1), ...tdFirstObserved /*.splice(1)*/, ...tdFirstResearch ];
                 
                 if(first)
                 {
