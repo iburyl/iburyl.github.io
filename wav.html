@@ -36,9 +36,22 @@
 <body>
     <div class="container">
         <input type="file" id="wavFile" accept=".wav" />
+        <button id="processButton">Generate Spectrogram</button>
         <audio id="audioPlayer" controls></audio>
         <canvas id="spectrogramCanvas"></canvas>
-        <button id="processButton">Generate Spectrogram</button>
+        <div id="info"></div>
+        <div style="display: flex; gap: 20px; align-items: center;">
+            <div>Start<br /><input type="text" id="start"></div>
+            <div>Stop<br /><input type="text" id="stop"></div>
+            <div>Min Freq<br /><input type="text" id="min_freq"></div>
+            <div>Max Freq<br /><input type="text" id="max_freq"></div>
+        </div>
+        <div style="display: flex; gap: 20px; align-items: center;">
+            <div>FFT<br /><input type="text" id="fft"></div>
+            <div>Hop size<br /><input type="text" id="hop"></div>
+            <div>Min Energy<br /><input type="text" id="min_e"></div>
+            <div>Kaiser Beta<br /><input type="text" id="kaiser_beta"></div>
+        </div>
     </div>
     <script src="js-wav/fft.js"></script>
     <script src="js-wav/script.js"></script>
