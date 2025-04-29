@@ -45,10 +45,6 @@ function getAudioContext(arrayBuffer, infoDiv)
 
         durationSeconds = dataSize / (sampleRate * numChannels * (bitsPerSample / 8));
 
-        const pre = '<tr><td>';
-        const mid = '</td><td>';
-        const post= '</td></tr>';
-
         const addLine = (name, value) => {return '<tr><td>' + name + '</td><td>' + value + '</td></tr>';};
 
         summary = summary +
@@ -71,6 +67,37 @@ function getAudioContext(arrayBuffer, infoDiv)
     infoDiv.innerHTML = summary + infoDiv.innerHTML;
 
     return audioContext;
+}
+
+function magnitudeToRGBDark(mag, minMag, maxMag) {
+    /*
+    let gradient = [
+        {point: 0   ,r:255,g:255,b:255},
+        {point: 1   ,r:  0,g:  0,b:  0},
+        ];
+    */
+    let gradient = [
+        {point: 0   ,r:  0,g:  0,b:0},
+        {point: 0.5 ,r:  0,g:180,b:0},
+        {point: 0.95,r:255,g:255,b:0},
+        {point: 1   ,r:255,g:  0,b:0},
+        ];
+    
+    let i;
+    for(i=1; i<gradient.length-1; i++)
+    {
+        if(mag<gradient[i].point) break;
+    }
+    mag = Math.max(mag, gradient[0].point);
+    mag = Math.min(mag, gradient[gradient.length-1].point);
+
+    let inner_point = (mag - gradient[i-1].point)/(gradient[i].point - gradient[i-1].point);
+
+    const r = Math.round(gradient[i-1].r + inner_point*(gradient[i].r - gradient[i-1].r));
+    const g = Math.round(gradient[i-1].g + inner_point*(gradient[i].g - gradient[i-1].g));
+    const b = Math.round(gradient[i-1].b + inner_point*(gradient[i].b - gradient[i-1].b));
+    
+    return `rgb(${r},${g},${b})`;
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -97,7 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let sharedImage;
     let sharedCanvasWindow;
-    let sharedDuration;
+    let sharedSignalWindow;
 
     audioElement.addEventListener('timeupdate', () => {
         ctx.putImageData(sharedImage, 0, 0);
@@ -105,14 +132,21 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 1;
 
-        let currentTime = audioElement.currentTime;
+        const currentTime = audioElement.currentTime;
+        const duration = sharedSignalWindow.duration;
 
-        let currentX = Math.floor(sharedCanvasWindow.width / sharedDuration * currentTime) + sharedCanvasWindow.x;
+        let currentX = Math.floor(sharedCanvasWindow.width / duration * (currentTime-sharedSignalWindow.start)) + sharedCanvasWindow.x;
 
         ctx.beginPath();
         ctx.moveTo(currentX, 0);
         ctx.lineTo(currentX, sharedCanvasWindow.height);
         ctx.stroke();
+
+        if(currentTime > sharedSignalWindow.start + sharedSignalWindow.duration)
+        {
+            audioElement.pause();
+            audioElement.currentTime = sharedSignalWindow.start;
+        }
     });
 
     fileInput.addEventListener('change', function() {
@@ -142,36 +176,36 @@ document.addEventListener('DOMContentLoaded', () => {
             const arrayBuffer = await file.arrayBuffer();
 
             let audioContext = getAudioContext(arrayBuffer, infoDiv);
-
             const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
             const sampleRate = audioBuffer.sampleRate;
             const duration   = audioBuffer.duration;
-            console.log('audioBuffer.sampleRate', audioBuffer.sampleRate)
-            console.log('time in seconds', duration)
 
-            sharedDuration = duration;
-
-            //const fftSize = 2048;
-            if(paramFFT.value == "") paramFFT.value = 2048;
-            if(paramHop.value == "") paramHop.value = 2048/4;
-            if(paramMinE.value == "") paramMinE.value = -5;
-            if(paramKaiserBeta.value == "") paramKaiserBeta.value = 10;
             if(paramStart.value == "") paramStart.value = 0;
             if(paramStop.value == "") paramStop.value = duration - Number(paramStart.value);
             if(paramMinFreq.value == "") paramMinFreq.value = 0;
-            if(paramMaxFreq.value == "") paramMaxFreq.value = sampleRate/2;
+            if(paramMaxFreq.value == "") paramMaxFreq.value = sampleRate / 1000 / 2;
 
-            const fftSize = Number(paramFFT.value);
-            let hopSize   = Number(paramHop.value);
-            const minE    = Number(paramMinE.value);
-            const kaiserBeta = Number(paramKaiserBeta.value);
             let userStart =    Number(paramStart.value);
             let userDuration = Math.min(Number(paramStop.value) - Number(paramStart.value), duration);
             let userMinFreq =  Number(paramMinFreq.value);
             let userMaxFreq =  Number(paramMaxFreq.value);
 
             const signalWindow = {start: userStart, duration: userDuration, minFreq: userMinFreq, maxFreq: userMaxFreq};
+
+            let pixelWidth = canvas.width;
+            let userPoints = userDuration * sampleRate;
+            
+            if(paramFFT.value == "") paramFFT.value = 2048;
+            /*if(paramHop.value == "")*/ paramHop.value = Math.ceil(userPoints/pixelWidth/5);
+            if(paramMinE.value == "") paramMinE.value = -5;
+            if(paramKaiserBeta.value == "") paramKaiserBeta.value = 10;
+
+            const fftSize = Number(paramFFT.value);
+            let hopSize   = Number(paramHop.value);
+            const minE    = Number(paramMinE.value);
+            const kaiserBeta = Number(paramKaiserBeta.value);
+
 
             //console.log(fftSize, hopSize, minE);
             //console.log('number of hops', (sampleRate * duration) / hopSize);            
@@ -182,10 +216,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const {spectrogramData, maxSpectrogramValue, energyData} = generateSpectrogram(fftSize, hopSize, signalWindow, sampleRate, kaiserBeta, audioBuffer, audioContext);
 
             // Draw spectrogram with axes
-            const {image, canvasWindow} = drawSpectrogram(spectrogramData, maxSpectrogramValue, signalWindow, minE, ctx);
+            const {image, canvasWindow} = drawSpectrogram(spectrogramData, sampleRate, maxSpectrogramValue, signalWindow, minE, ctx);
 
             sharedImage = image;
             sharedCanvasWindow = canvasWindow;
+            sharedSignalWindow = signalWindow;
+
+            audioElement.currentTime = userStart;
 
         } 
         catch (error) {
@@ -234,29 +271,30 @@ document.addEventListener('DOMContentLoaded', () => {
         let stop  = Math.min(Math.floor((signalWindow.start + signalWindow.duration) * sampleRate) + fftSize, channelData.length);
 
         const beta = kaiserBeta;
-        const window = kaiserWindow(fftSize, beta);
+        const window = (beta>=0)?kaiserWindow(fftSize, beta):[];
 
         for (let i = start; i < stop; i += hopSize) {
             const chunk = channelData.slice(i, i + fftSize);
             if (chunk.length < fftSize) break;
 
-            for(let j = 0; j < fftSize; j++) chunk[j] *= window[j];
+            if(beta>=0) for(let j = 0; j < fftSize; j++) chunk[j] *= window[j];
 
             const f = new FFT(fftSize);
             const out = f.createComplexArray();
             f.realTransform(out, chunk);
 
-            spectrogramData.push(out);
+            const magnitude = new Array(fftSize+1);;
 
             let frameEnergy = 0;
             for(j=0;j<fftSize;j++)
             {
-                out[j] = Math.abs(out[j]);
-                //frameEnergy += out[j] * out[j];
+                magnitude[j] = Math.sqrt(out[j*2]*out[j*2] + out[j*2+1]*out[j*2+1]);
+
                 frameEnergy += out[j];
-                maxSpectrogramValue = Math.max(out[j], maxSpectrogramValue);
+                maxSpectrogramValue = Math.max(magnitude[j], maxSpectrogramValue);
             }
 
+            spectrogramData.push(magnitude);
             energy.push(frameEnergy);
         }
 
@@ -294,6 +332,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const colorValue = 255 - Math.floor(normalizedValue * 255);
                 ctx.fillStyle = `rgb(${colorValue}, ${colorValue}, ${colorValue})`;
+
+                ctx.fillStyle = magnitudeToRGBDark(normalizedValue, 0, 1);
                 ctx.fillRect(canvasWindow.x+x, canvasWindow.y-y, 1, 1);
             }
         }
@@ -326,7 +366,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function drawFreqAxisY(maxFreq, canvasWindow, tickLen, labelPadding, ctx) {
+    function drawFreqAxisY(signalWindow, canvasWindow, tickLen, labelPadding, ctx) {
         // Y-axis
         ctx.beginPath();
         ctx.moveTo(canvasWindow.x, 0);
@@ -338,9 +378,13 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.textAlign = 'right';
         ctx.textBaseline = 'middle';
 
+        const freqWidth = signalWindow.maxFreq - signalWindow.minFreq;
+
+        let digits = (signalWindow.maxFreq > 15)?0:1;
+
         for (let i = 0; i <= numFreqTicks; i++) {
             const y = canvasWindow.height - (i / numFreqTicks) * canvasWindow.height;
-            const freq = (i / numFreqTicks) * maxFreq;
+            const freq = signalWindow.minFreq + (i / numFreqTicks) * freqWidth;
             
             // Draw tick
             ctx.beginPath();
@@ -349,13 +393,13 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.stroke();
 
             // Draw label
-            ctx.fillText((freq / 1000).toFixed(0) + 'kHz', canvasWindow.x - tickLen - labelPadding, y);
+            ctx.fillText(freq.toFixed(digits) + 'kHz', canvasWindow.x - tickLen - labelPadding, y);
         }
     }
 
-    function drawSpectrogram(data, maxSpectrogramValue, signalWindow, minE, ctx) {
+    function drawSpectrogram(data, sampleRate, maxSpectrogramValue, signalWindow, minE, ctx) {
         const duration = signalWindow.duration;
-        const sampleRate = signalWindow.maxFreq - signalWindow.minFreq;
+        //const sampleRate = signalWindow.maxFreq - signalWindow.minFreq;
 
         // Constants for axis drawing
         const AXIS_Y_PADDING = 50;
@@ -379,7 +423,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // Clear canvas
         ctx.clearRect(0, 0, width, height);
 
-        drawSpectrogramWindow(0, numFrames, 0, numBins/2, canvasWindow, data, maxSpectrogramValue, minE, ctx);
+        const binsPerKHz = numBins/sampleRate*1000;
+        
+        const firstBin = Math.floor(signalWindow.minFreq * binsPerKHz);
+        const lastBin = Math.min(firstBin + Math.floor((signalWindow.maxFreq - signalWindow.minFreq) * binsPerKHz), numBins);
+
+        drawSpectrogramWindow(0, numFrames, firstBin, lastBin, canvasWindow, data, maxSpectrogramValue, minE, ctx);
 
         // Draw axes
         ctx.strokeStyle = '#000';
@@ -389,10 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.fillStyle = `#000`;
 
         drawTimeAxisX(signalWindow, canvasWindow, TICK_LENGTH, LABEL_PADDING, ctx);
-
-        const maxFreq = sampleRate / 2; // Nyquist frequency
-
-        drawFreqAxisY(maxFreq, canvasWindow, TICK_LENGTH, LABEL_PADDING, ctx);
+        drawFreqAxisY(signalWindow, canvasWindow, TICK_LENGTH, LABEL_PADDING, ctx);
 
         return {image: ctx.getImageData(0, 0, width, height), canvasWindow: canvasWindow};
     }
