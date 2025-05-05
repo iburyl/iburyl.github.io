@@ -1,3 +1,9 @@
+async function urlToFile(url, filename, mimeType) {
+  const res = await fetch(url);
+  const buffer = await res.arrayBuffer();
+  return new File([buffer], filename, { type: mimeType });
+}
+
 function findWavChunk(name, dataView) {
     let offset = 12;
     while (offset < dataView.byteLength) {

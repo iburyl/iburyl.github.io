@@ -98,8 +98,9 @@ function drawFreqWindow(firstBin, lastBin, freqCanvasWindow, freqData, ctx) {
     }
 }
 
-function drawSpectrogram(specData, timeData, freqData, sampleRate, signalWindow, minE, ctx) {
+function drawSpectrogram(specData, timeData, freqData, signalWindow, minE, ctx) {
     const duration = signalWindow.duration;
+    const sampleRate = signalWindow.sampleRate;
 
     // Constants for axis drawing
     const AXIS_Y_PADDING = 50;
@@ -133,7 +134,7 @@ function drawSpectrogram(specData, timeData, freqData, sampleRate, signalWindow,
 
     let specCanvasWindow = {x: spectrogramX, y:spectrogramY, width:spectrogramWidth, height:spectrogramHeight};
     let timeCanvasWindow = {x: timeX, y: timeY, width:timeWidth, height:timeHeight};
-    let freqCanvasWindow = {x: freqX, y: freqY, width:freqWidth, height:freqHeight};
+    let freqCanvasWindow = {x: freqX+1, y: freqY, width:freqWidth, height:freqHeight};
 
     // Clear mainCanvas
     ctx.clearRect(0, 0, width, height);

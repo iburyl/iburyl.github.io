@@ -11,7 +11,7 @@ function magnitudeToRGBDark(mag, minMag, maxMag) {
         {point: 0.95,r:255,g:255,b:0},
         {point: 1   ,r:255,g:  0,b:0},
         ];
-    
+
     let i;
     for(i=1; i<gradient.length-1; i++)
     {

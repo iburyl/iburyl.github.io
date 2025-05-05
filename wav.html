@@ -26,7 +26,7 @@
             background-color: #f5f5f5;
         }
         button {
-            padding: 10px 20px;
+            padding: 5px 5px;
             background-color: #4CAF50;
             color: white;
             border: none;
@@ -40,19 +40,38 @@
 </head>
 <body>
     <div class="container">
-        <input type="file" id="wavFile" accept=".wav" />
-        <button id="processButton">Generate Spectrogram</button>
-        <audio id="audioPlayer" controls></audio>
-        <canvas id="mainCanvas"></canvas>
         <div class="input_list">
-            <div id="info"></div>
-            <div id="stats"></div>
+        <div>Local file</div>
+        <input type="file" id="wavFile" accept=".wav" />
+        <div>or URL</div>
+            <input type="text" id="wavFileUrl" style="width: 50%;" />
+             <!--https://static.inaturalist.org/sounds/1390171.m4a?1745365334-->
+            <button id="load">load</button>
+        </div>
+        <div class="input_list">
+        <audio id="audioPlayer" controls></audio>
+        <button id="ratio_1_1">1:1</button>
+        <button id="ratio_3_2">3:2</button>
+        <button id="ratio_max">max</button>
+        </div>
+        <canvas id="mainCanvas"></canvas>
+        <div>
+            <button id="move_left_fast">&#x25C0;&#x25C0;</button>
+            <button id="move_left">&#x25C0;</button>
+            <button id="updateButton">Update</button>
+            <button id="zoom_in">Zoom in</button>
+            <button id="zoom_peak">Zoom in peak</button>
+            <button id="zoom_out">Zoom out</button>
+            <button id="resetButton">Reset</button>
+            <button id="move_right">&#x25B6;</button>
+            <button id="move_right_fast">&#x25B6;&#x25B6;</button>
         </div>
         <div class="input_list">
             <div>Start (s)<br /><input type="text" id="start"></div>
             <div>Stop (s)<br /><input type="text" id="stop"></div>
             <div>Min Freq (KHz)<br /><input type="text" id="min_freq"></div>
             <div>Max Freq (KHz)<br /><input type="text" id="max_freq"></div>
+            
         </div>
         <div class="input_list">
             <div>FFT<br /><input type="text" id="fft"></div>
@@ -61,7 +80,12 @@
             <div>Kaiser Beta<br /><input type="text" id="kaiser_beta"></div>
         </div>
         <div class="input_list">
-            <button id="find_peak">find bat call</button>
+            <div>Search Min Freq (KHz)<br /><input type="text" id="peak_min_freq"></div>
+            <div>Search Max Freq (KHz)<br /><input type="text" id="peak_max_freq"></div>
+        </div>
+        <div class="input_list">
+            <div id="info"></div>
+            <div id="peak_stats"></div>                
         </div>
 
     </div>
