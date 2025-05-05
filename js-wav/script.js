@@ -272,7 +272,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('load').addEventListener('click', async () => {
         try {
-               wavFileUrl
             urlToFile(document.getElementById('load').value, 'data.wav', 'application/octet-stream')
             .then(file => {
                 const fileUrl = URL.createObjectURL(file);
