@@ -278,7 +278,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             sharedFile = file;
 
-            showFile();
+            //showFile();
 
         //} 
         /*
