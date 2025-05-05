@@ -1,6 +1,7 @@
 async function urlToFile(url, filename, mimeType) {
   const res = await fetch(url);
   const buffer = await res.arrayBuffer();
+  console.log(buffer);
   return new File([buffer], filename, { type: mimeType });
 }
 
