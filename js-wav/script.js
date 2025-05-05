@@ -271,22 +271,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('load').addEventListener('click', async () => {
-        try {
-            urlToFile(document.getElementById('load').value, 'data.wav', 'application/octet-stream')
-            .then(file => {
-                const audioURL = URL.createObjectURL(file);
-                document.getElementById('audioPlayer').src = audioURL;
+        //try {
+            const file = await urlToFile(document.getElementById('load').value, 'data.wav', 'application/octet-stream');
+            const audioURL = URL.createObjectURL(file);
+            document.getElementById('audioPlayer').src = audioURL;
 
-                sharedFile = file;
+            sharedFile = file;
 
-                showFile();
-            });
+            showFile();
 
-        } 
+        //} 
+        /*
         catch (error) {
             console.error(error);
             alert('Failed to load file');
         }
+        */
     });
 
     document.getElementById('updateButton').addEventListener('click', async () => {
