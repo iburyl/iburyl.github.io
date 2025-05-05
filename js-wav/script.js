@@ -274,7 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             urlToFile(document.getElementById('load').value, 'data.wav', 'application/octet-stream')
             .then(file => {
-                const fileUrl = URL.createObjectURL(file);
+                const audioURL = URL.createObjectURL(file);
                 document.getElementById('audioPlayer').src = audioURL;
 
                 sharedFile = file;
