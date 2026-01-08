@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <link href="css/main.css" rel="stylesheet" />
+
+<style>
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+#chartdiv {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100vh;
+  z-index: 1;
+}
+
+.control-panel {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  z-index: 1000;
+  max-width: 300px;
+}
+
+.species-filter {
+  position: fixed;
+  top: 10px;
+  left: 330px;
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  z-index: 1000;
+}
+
+#speciesTableContainer {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+  z-index: 1000;
+  max-width: 500px;
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+}
+
+#speciesTableContainer.collapsed {
+  padding: 10px;
+}
+
+#speciesTableContainer.collapsed #speciesTable {
+  display: none;
+}
+
+.table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.table-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.toggle-btn {
+  background: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.toggle-btn:hover {
+  background: #e0e0e0;
+}
+
+#speciesTable {
+  max-height: calc(100vh - 120px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  border: 1px solid #ccc;
+  padding: 5px;
+  background: white;
+}
+
+.species-row {
+  display: flex;
+  align-items: center;
+  padding: 5px;
+  border-bottom: 1px solid #eee;
+  gap: 10px;
+}
+
+.species-row:hover {
+  background-color: #f5f5f5;
+}
+
+.species-color {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #000;
+  flex-shrink: 0;
+}
+
+.species-name {
+  flex: 1;
+  min-width: 120px;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.species-alpha {
+  width: 70px;
+  padding: 2px 4px;
+}
+
+.species-points {
+  color: #666;
+  font-size: 0.85em;
+  min-width: 60px;
+}
+
+.recalc-btn {
+  padding: 3px 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+#instruction, #detail_div {
+  display: none;
+}
+</style>
+
+</head>
+<body>
+
+<!-- Map container (full screen) -->
+<div id="chartdiv"></div>
+
+<!-- Control panel for CSV upload -->
+<div class="control-panel">
+  <form id="geoForm">
+    <strong>Load Data</strong><br />
+    <input type="file" id="csvFile" accept=".csv" style="margin: 5px 0;" /><br />
+    <label for="alpha">Default Alpha:</label>
+    <input type="number" id="alpha" name="alpha" value="0.2" step="0.01" style="width: 60px;" />
+    <br />
+    <input type="submit" name="read" value="Show ranges" style="margin-top: 5px;" />
+  </form>
+</div>
+
+<!-- Species filter dropdown -->
+<div class="species-filter">
+  <label for="species"><strong>Show species:</strong></label><br />
+  <select id="species" name="species" style="width: 200px; margin-top: 5px;">
+    <option value="all">All</option>
+  </select>
+</div>
+
+<!-- Species table overlay -->
+<div id="speciesTableContainer">
+  <div class="table-header">
+    <h3>Species Ranges</h3>
+    <button class="toggle-btn" onclick="toggleSpeciesTable()">Hide</button>
+  </div>
+  <div id="speciesTable"></div>
+</div>
+
+<div id="instruction"></div>
+<div id="detail_div"></div>
+
+<script type="text/javascript" src="js/csv_to_array.js"></script>
+<script type="text/javascript" src="js/lists_parsing.js"></script>
+<script type="text/javascript" src="js/utils.js"></script>
+<script type="text/javascript" src="js/utils_charts.js"></script>
+<script type="text/javascript" src="js/utils_stats.js"></script>
+
+<script src="https://cdn.amcharts.com/lib/5/index.js"></script>
+<script src="https://cdn.amcharts.com/lib/5/map.js"></script>
+<script src="https://cdn.amcharts.com/lib/5/geodata/worldLow.js"></script>
+<script src="https://cdn.amcharts.com/lib/5/geodata/usaLow.js"></script>
+<script src="https://cdn.amcharts.com/lib/5/themes/Animated.js"></script>
+
+<script src="https://unpkg.com/delaunator@5.0.0/delaunator.min.js"></script>
+
+<script>
+let root;
+let chart;
+let rangeSeries;
+let pointSeries;
+let labelSeries;
+
+am5.ready(function() {
+
+    // Create root element: https://www.amcharts.com/docs/v5/getting-started/#Root_element
+    root = am5.Root.new("chartdiv");
+    // Set themes: https://www.amcharts.com/docs/v5/concepts/themes/
+    root.setThemes([ am5themes_Animated.new(root) ]);
+    // Create the map chart: https://www.amcharts.com/docs/v5/charts/map-chart/
+    chart = root.container.children.push(am5map.MapChart.new(root, {
+      panX: "translateX",
+      panY: "translateY",
+      projection: am5map.geoMercator()
+    }));
+
+    // Create main polygon series for countries: https://www.amcharts.com/docs/v5/charts/map-chart/map-polygon-series/
+    var polygonSeries = chart.series.push(am5map.MapPolygonSeries.new(root, {
+      geoJSON: am5geodata_worldLow,
+      exclude: ["AQ"]
+    }));
+    polygonSeries.mapPolygons.template.setAll({
+      fill: am5.color(0xffffff),
+      fillOpacity: 1,
+      stroke: am5.color(0x000000),
+      strokeWidth: 0.5,
+      strokeOpacity: 1
+    });
+
+    // Create polygon series for US states
+    var usStatesSeries = chart.series.push(am5map.MapPolygonSeries.new(root, {
+      geoJSON: am5geodata_usaLow
+    }));
+    usStatesSeries.mapPolygons.template.setAll({
+      fill: am5.color(0xffffff),
+      fillOpacity: 1,
+      stroke: am5.color(0x000000),
+      strokeWidth: 0.5,
+      strokeOpacity: 1
+    });
+
+    // Create polygon series for the range
+    rangeSeries = chart.series.push(am5map.MapPolygonSeries.new(root, {}));
+    rangeSeries.mapPolygons.template.setAll({
+      fillOpacity: 0.3,
+      strokeWidth: 2,
+      tooltipText: "{name}"
+    });
+    
+    // Set colors from feature properties
+    rangeSeries.mapPolygons.template.adapters.add("fill", function(fill, target) {
+      const dataItem = target.dataItem;
+      if (dataItem) {
+        const color = dataItem.dataContext.fill;
+        if (color) return am5.color(color);
+      }
+      return fill;
+    });
+    
+    rangeSeries.mapPolygons.template.adapters.add("stroke", function(stroke, target) {
+      const dataItem = target.dataItem;
+      if (dataItem) {
+        const color = dataItem.dataContext.stroke;
+        if (color) return am5.color(color);
+      }
+      return stroke;
+    });
+
+    // Create point series for observations
+    pointSeries = chart.series.push(am5map.MapPointSeries.new(root, {}));
+    pointSeries.bullets.push(function() {
+      return am5.Bullet.new(root, {
+        sprite: am5.Circle.new(root, {
+          radius: 4,
+          fill: am5.color(0x000000),
+          stroke: am5.color(0xffffff),
+          strokeWidth: 1,
+          tooltipText: "{tooltipText}"
+        })
+      });
+    });
+
+    // Create label series for species names
+    labelSeries = chart.series.push(am5map.MapPointSeries.new(root, {}));
+    labelSeries.bullets.push(function() {
+      const label = am5.Label.new(root, {
+        text: "{name}",
+        fontSize: 12,
+        fontWeight: "bold",
+        stroke: am5.color(0xffffff),
+        strokeWidth: 3,
+        paintOrder: "stroke",
+        centerX: am5.p50,
+        centerY: am5.p50,
+        populateText: true
+      });
+      
+      // Set color from data
+      label.adapters.add("fill", function(fill, target) {
+        const dataItem = target.dataItem;
+        if (dataItem && dataItem.dataContext.color) {
+          return am5.color(dataItem.dataContext.color);
+        }
+        return am5.color(0x000000);
+      });
+      
+      return am5.Bullet.new(root, {
+        sprite: label
+      });
+    });
+
+}); // end am5.ready()
+
+</script>
+
+<script>
+const geoForm = document.getElementById("geoForm");
+
+// Store globally so we can recalculate
+let observations = [];
+let features = [];
+let labels = [];
+let allSpecies = [];
+let speciesAlphas = {}; // Store alpha value per species
+let speciesPointCounts = {}; // Store point counts per species
+
+// Alpha Hull (Concave Hull)
+function getRange(obs_with_geo, alpha) {
+  const coords = obs_with_geo.flatMap((obs) => [parseFloat(obs.geo_long), parseFloat(obs.geo_lat)]);
+
+  const delaunay = new Delaunator(coords);
+
+  const triangles = delaunay.triangles;
+
+  const edges = new Map();
+
+  for (let i = 0; i < triangles.length; i += 3) {
+    const a = [coords[triangles[i    ]*2], coords[triangles[i    ]*2 + 1]];
+    const b = [coords[triangles[i + 1]*2], coords[triangles[i + 1]*2 + 1]];
+    const c = [coords[triangles[i + 2]*2], coords[triangles[i + 2]*2 + 1]];
+
+    const R = circumradius(a, b, c);
+    if (R <= 1 / alpha) {
+      addEdge(edges, triangles[i], triangles[i + 1]);
+      addEdge(edges, triangles[i + 1], triangles[i + 2]);
+      addEdge(edges, triangles[i + 2], triangles[i]);
+    }
+  }
+
+  // --- Collect boundary edges (appear only once)
+  const boundaryEdges = [...edges.entries()]
+    .filter(([, c]) => c === 1)
+    .map(([k]) => k.split('-').map(Number));
+
+
+  console.log(boundaryEdges.length);
+
+  // --- Reconstruct ordered polygon from edges
+  const adj = new Map();
+  for (const [a, b] of boundaryEdges) {
+    if (!adj.has(a)) adj.set(a, []);
+    if (!adj.has(b)) adj.set(b, []);
+    adj.get(a).push(b);
+    adj.get(b).push(a);
+  }
+
+  // start from arbitrary boundary vertex
+  const start = boundaryEdges[0][0];
+  const polygon = [start];
+  let prev = null, current = start;
+
+  while (true) {
+    const nexts = adj.get(current).filter(n => n !== prev);
+    if (nexts.length === 0) break; // end of chain
+    const next = nexts[0];
+    polygon.push(next);
+    prev = current;
+    current = next;
+    if (next === start) break; // closed loop
+  }
+
+  return polygon.map(i => [coords[i*2], coords[i*2 + 1]]);
+
+}
+
+function circumradius(a, b, c) {
+  const A = Math.hypot(b[0] - c[0], b[1] - c[1]);
+  const B = Math.hypot(a[0] - c[0], a[1] - c[1]);
+  const C = Math.hypot(a[0] - b[0], a[1] - b[1]);
+  const area = Math.abs((a[0]*(b[1]-c[1]) + b[0]*(c[1]-a[1]) + c[0]*(a[1]-b[1])) / 2);
+  return (A * B * C) / (4 * area);
+}
+
+function addEdge(map, i, j) {
+  const key = i < j ? `${i}-${j}` : `${j}-${i}`;
+  map.set(key, (map.get(key) || 0) + 1);
+}
+
+function ensureCounterClockwise(coords) {
+  // Calculate signed area using the shoelace formula
+  let signedArea = 0;
+  for (let i = 0; i < coords.length - 1; i++) {
+    signedArea += (coords[i][0] * coords[i + 1][1]) - (coords[i + 1][0] * coords[i][1]);
+  }
+  
+  // For GeoJSON exterior rings: positive area = counter-clockwise (correct)
+  // If positive, keep as is; if negative, reverse
+  if (signedArea > 0) {
+    return coords.slice().reverse();
+  }
+  return coords;
+}
+
+function HueToRGB(hue) {
+  const h = hue / 60;
+  const c = 0.7; // chroma (from 70% saturation)
+  const x = c * (1 - Math.abs((h % 2) - 1));
+  let r, g, b;
+  if (h < 1) { r = c; g = x; b = 0; }
+  else if (h < 2) { r = x; g = c; b = 0; }
+  else if (h < 3) { r = 0; g = c; b = x; }
+  else if (h < 4) { r = 0; g = x; b = c; }
+  else if (h < 5) { r = x; g = 0; b = c; }
+  else { r = c; g = 0; b = x; }
+  const m = 0.5 - c / 2; // match lightness 50%
+  const rgb = [
+      Math.round((r + m) * 255),
+      Math.round((g + m) * 255),
+      Math.round((b + m) * 255)
+  ];
+  return `#${rgb.map(v => v.toString(16).padStart(2, '0')).join('')}`;
+}
+
+function calculateCentroid(coords) {
+  let sumX = 0, sumY = 0;
+  for (let i = 0; i < coords.length; i++) {
+    sumX += coords[i][0];
+    sumY += coords[i][1];
+  }
+  return [sumX / coords.length, sumY / coords.length];
+}
+
+// Abbreviate species name (e.g., "Danaus plexippus" -> "D. plexippus")
+function abbreviateSpeciesName(fullName) {
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length < 2) return fullName;
+  return parts[0].charAt(0) + ". " + parts.slice(1).join(" ");
+}
+
+// Toggle species table visibility
+function toggleSpeciesTable() {
+  const container = document.getElementById("speciesTableContainer");
+  const btn = container.querySelector(".toggle-btn");
+  
+  if (container.classList.contains("collapsed")) {
+    container.classList.remove("collapsed");
+    btn.textContent = "Hide";
+  } else {
+    container.classList.add("collapsed");
+    btn.textContent = "Show";
+  }
+}
+
+// Generate species table with individual alpha values
+function generateSpeciesTable() {
+  const tableDiv = document.getElementById("speciesTable");
+  tableDiv.innerHTML = "";
+  
+  allSpecies.forEach((species_name, index) => {
+    const hue = (index * 360 / allSpecies.length) % 360;
+    const colorHex = HueToRGB(hue);
+    const alpha = speciesAlphas[species_name] || 0.2;
+    const pointCount = speciesPointCounts[species_name] || 0;
+    
+    const row = document.createElement("div");
+    row.className = "species-row";
+    row.innerHTML = `
+      <div class="species-color" style="background-color: ${colorHex};"></div>
+      <div class="species-name">${abbreviateSpeciesName(species_name)}</div>
+      <input type="number" class="species-alpha" value="${alpha}" step="0.01" min="0.01" max="10" 
+             data-species="${species_name}" />
+      <div class="species-points">${pointCount} pts</div>
+      <button class="recalc-btn" data-species="${species_name}">Recalc</button>
+    `;
+    
+    // Add event listener for alpha change
+    const alphaInput = row.querySelector(".species-alpha");
+    alphaInput.addEventListener("change", function() {
+      speciesAlphas[species_name] = parseFloat(this.value);
+    });
+    
+    // Add event listener for recalculate button
+    const recalcBtn = row.querySelector(".recalc-btn");
+    recalcBtn.addEventListener("click", function() {
+      recalculateSpeciesRange(species_name);
+    });
+    
+    tableDiv.appendChild(row);
+  });
+}
+
+// Calculate range feature and label for a species (without UI updates)
+function calculateSpeciesFeatureAndLabel(species_name, species_obs, speciesIndex) {
+  const alpha_species = speciesAlphas[species_name] || 0.2;
+  
+  // Calculate boundary
+  const boundary_coords = getRange(species_obs, alpha_species);
+  
+  // Filter out any invalid coordinates
+  const validCoords = boundary_coords.filter(coord => 
+    coord && coord.length === 2 && 
+    !isNaN(coord[0]) && !isNaN(coord[1]) &&
+    isFinite(coord[0]) && isFinite(coord[1])
+  );
+  
+  if (validCoords.length === 0) {
+    return null;
+  }
+  
+  // Ensure counter-clockwise winding order
+  const orderedCoords = ensureCounterClockwise(validCoords);
+  // Round sharp corners only (avoids overshoots on edges)
+  const roundedCoords = roundCorners(orderedCoords, 0.15, 2.5);
+  // Apply gentle Chaikin smoothing for final polish
+  const smoothedCoords = smoothPolygon(roundedCoords, 1);
+  // Reduce to max 100 points while preserving shape
+  const simplifiedCoords = simplifyPolygon(smoothedCoords, 0.0001, 100);
+  console.log(species_name, "points:", validCoords.length, "→", roundedCoords.length, "→", smoothedCoords.length, "→", simplifiedCoords.length);
+  
+  // Update point count
+  speciesPointCounts[species_name] = simplifiedCoords.length;
+  
+  // Close the polygon by adding the first point at the end
+  const polygonCoords = [...simplifiedCoords, simplifiedCoords[0]];
+  
+  // Generate color for this species
+  const hue = (speciesIndex * 360 / allSpecies.length) % 360;
+  const colorHex = HueToRGB(hue);
+  
+  // Create feature
+  const feature = {
+    type: "Feature",
+    properties: {
+      name: species_name,
+      fill: colorHex,
+      fillOpacity: 0.3,
+      stroke: colorHex,
+      strokeWidth: 2
+    },
+    geometry: {
+      type: "Polygon",
+      coordinates: [polygonCoords]
+    }
+  };
+  
+  // Calculate centroid for label placement
+  const centroid = calculateCentroid(orderedCoords);
+  const label = {
+    geometry: {
+      type: "Point",
+      coordinates: centroid
+    },
+    name: abbreviateSpeciesName(species_name),
+    color: colorHex
+  };
+  
+  return { feature, label };
+}
+
+// Recalculate range for a specific species
+function recalculateSpeciesRange(selectedSpecies) {
+  const alpha_species = speciesAlphas[selectedSpecies] || 0.2;
+  
+  console.log("Recalculating range for", selectedSpecies, "with alpha", alpha_species);
+  
+  // Get observations for this species
+  const species_obs = observations.filter((obs) => 
+    obs.lat_name && obs.lat_name.startsWith(selectedSpecies) &&
+    typeof obs.geo_lat !== "undefined" && typeof obs.geo_long !== "undefined"
+  );
+  
+  if(species_obs.length < 3) {
+    alert("Not enough observations for this species (need at least 3)");
+    return;
+  }
+  
+  // Calculate feature and label using shared function
+  const speciesIndex = allSpecies.indexOf(selectedSpecies);
+  const result = calculateSpeciesFeatureAndLabel(selectedSpecies, species_obs, speciesIndex);
+  
+  if (!result) {
+    alert("Could not calculate valid range for this species");
+    return;
+  }
+  
+  const { feature: newFeature, label: newLabel } = result;
+  
+  // Update or create feature for this species
+  const featureIndex = features.findIndex((f) => f.properties.name === selectedSpecies);
+  if(featureIndex >= 0) {
+    features[featureIndex] = newFeature;
+  } else {
+    features.push(newFeature);
+  }
+  
+  // Update or create label for this species
+  const labelIndex = labels.findIndex((l) => l.name === newLabel.name);
+  if(labelIndex >= 0) {
+    labels[labelIndex] = newLabel;
+  } else {
+    labels.push(newLabel);
+  }
+  
+  // Update the table to reflect new point count
+  generateSpeciesTable();
+  
+  // Get current selected species from dropdown
+  const currentSelection = document.getElementById("species").value;
+  
+  if(currentSelection === selectedSpecies) {
+    // Update the map - show only the selected species
+    const geoJSON = {
+      type: "FeatureCollection",
+      features: features.filter((feature) => feature.properties.name === selectedSpecies)
+    };
+    rangeSeries.data.clear();
+    rangeSeries.set("geoJSON", geoJSON);
+    
+    // Show label for selected species only
+    const selectedLabels = labels.filter((label) => label.name === newLabel.name);
+    labelSeries.data.setAll(selectedLabels);
+    
+    // Show observation points for this species
+    const pointData = species_obs.map((obs) => ({
+      geometry: {
+        type: "Point",
+        coordinates: [parseFloat(obs.geo_long), parseFloat(obs.geo_lat)]
+      },
+      tooltipText: obs.lat_name + (obs.date ? " (" + obs.date + ")" : "")
+    }));
+    
+    pointSeries.data.setAll(pointData);
+  } else if(currentSelection === "all") {
+    // Update the all view
+    const geoJSON = {
+      type: "FeatureCollection",
+      features: features
+    };
+    rangeSeries.data.clear();
+    rangeSeries.set("geoJSON", geoJSON);
+    labelSeries.data.setAll(labels);
+    pointSeries.data.clear();
+  }
+  
+  console.log("Range recalculated successfully");
+}
+
+// Calculate angle at a vertex
+function getAngle(p1, p2, p3) {
+  const v1 = [p1[0] - p2[0], p1[1] - p2[1]];
+  const v2 = [p3[0] - p2[0], p3[1] - p2[1]];
+  
+  const dot = v1[0] * v2[0] + v1[1] * v2[1];
+  const mag1 = Math.sqrt(v1[0] * v1[0] + v1[1] * v1[1]);
+  const mag2 = Math.sqrt(v2[0] * v2[0] + v2[1] * v2[1]);
+  
+  if (mag1 === 0 || mag2 === 0) return Math.PI;
+  
+  const cosAngle = dot / (mag1 * mag2);
+  return Math.acos(Math.max(-1, Math.min(1, cosAngle)));
+}
+
+// Round only sharp corners, leaving smooth edges intact
+function roundCorners(coords, radius = 0.1, angleThreshold = 2.5) {
+  if (coords.length < 3) return coords;
+  
+  const rounded = [];
+  const len = coords.length;
+  
+  for (let i = 0; i < len; i++) {
+    const prev = coords[(i - 1 + len) % len];
+    const curr = coords[i];
+    const next = coords[(i + 1) % len];
+    
+    const angle = getAngle(prev, curr, next);
+    
+    // If angle is sharp (less than threshold radians), round it
+    if (angle < angleThreshold) {
+      // Calculate edge vectors
+      const v1 = [prev[0] - curr[0], prev[1] - curr[1]];
+      const v2 = [next[0] - curr[0], next[1] - curr[1]];
+      
+      const len1 = Math.sqrt(v1[0] * v1[0] + v1[1] * v1[1]);
+      const len2 = Math.sqrt(v2[0] * v2[0] + v2[1] * v2[1]);
+      
+      if (len1 > 0 && len2 > 0) {
+        // Normalize vectors
+        v1[0] /= len1; v1[1] /= len1;
+        v2[0] /= len2; v2[1] /= len2;
+        
+        // Scale by radius (but not more than half the edge length)
+        const r = Math.min(radius, len1 * 0.4, len2 * 0.4);
+        
+        // Create rounded corner with 3 points
+        const p1 = [curr[0] + v1[0] * r, curr[1] + v1[1] * r];
+        const p2 = [curr[0] + (v1[0] + v2[0]) * r * 0.5, curr[1] + (v1[1] + v2[1]) * r * 0.5];
+        const p3 = [curr[0] + v2[0] * r, curr[1] + v2[1] * r];
+        
+        rounded.push(p1, p2, p3);
+      } else {
+        rounded.push(curr);
+      }
+    } else {
+      // Angle is not sharp, keep the point as is
+      rounded.push(curr);
+    }
+  }
+  
+  return rounded;
+}
+
+// Smooth polygon using Chaikin's corner cutting algorithm (gentle, no overshoots)
+function smoothPolygon(coords, iterations = 2) {
+  let smoothed = coords.slice();
+  
+  for (let iter = 0; iter < iterations; iter++) {
+    const newCoords = [];
+    const len = smoothed.length;
+    
+    for (let i = 0; i < len; i++) {
+      const p1 = smoothed[i];
+      const p2 = smoothed[(i + 1) % len];
+      
+      // Cut corners: create two new points at 1/4 and 3/4 along each edge
+      const q = [
+        p1[0] * 0.75 + p2[0] * 0.25,
+        p1[1] * 0.75 + p2[1] * 0.25
+      ];
+      const r = [
+        p1[0] * 0.25 + p2[0] * 0.75,
+        p1[1] * 0.25 + p2[1] * 0.75
+      ];
+      
+      newCoords.push(q, r);
+    }
+    
+    smoothed = newCoords;
+  }
+  
+  return smoothed;
+}
+
+// Alternative: Catmull-Rom spline interpolation for smoother curves
+function smoothPolygonCatmullRom(coords, pointsPerSegment = 10) {
+  if (coords.length < 3) return coords;
+  
+  const smoothed = [];
+  const len = coords.length;
+  
+  for (let i = 0; i < len; i++) {
+    const p0 = coords[(i - 1 + len) % len];
+    const p1 = coords[i];
+    const p2 = coords[(i + 1) % len];
+    const p3 = coords[(i + 2) % len];
+    
+    // Generate points along the Catmull-Rom spline
+    for (let t = 0; t < 1; t += 1 / pointsPerSegment) {
+      const t2 = t * t;
+      const t3 = t2 * t;
+      
+      const x = 0.5 * (
+        (2 * p1[0]) +
+        (-p0[0] + p2[0]) * t +
+        (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
+        (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3
+      );
+      
+      const y = 0.5 * (
+        (2 * p1[1]) +
+        (-p0[1] + p2[1]) * t +
+        (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
+        (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3
+      );
+      
+      smoothed.push([x, y]);
+    }
+  }
+  
+  return smoothed;
+}
+
+// Reduce number of points in polygon to maxPoints while preserving shape
+function reducePolygonPoints(coords, maxPoints = 100) {
+  if (coords.length <= maxPoints) return coords;
+  
+  // Use Douglas-Peucker-like simplification by uniform sampling
+  // Calculate step size to get approximately maxPoints
+  const step = coords.length / maxPoints;
+  const reduced = [];
+  
+  for (let i = 0; i < coords.length; i += step) {
+    reduced.push(coords[Math.floor(i)]);
+  }
+  
+  // Ensure we don't exceed maxPoints
+  if (reduced.length > maxPoints) {
+    reduced.length = maxPoints;
+  }
+  
+  return reduced;
+}
+
+// Simplified Douglas-Peucker algorithm for better shape preservation
+function simplifyPolygon(coords, tolerance = 0.0001, maxPoints = 100) {
+  if (coords.length <= maxPoints) return coords;
+  
+  // Start with uniform sampling if we have way too many points
+  if (coords.length > maxPoints * 3) {
+    coords = reducePolygonPoints(coords, maxPoints * 2);
+  }
+  
+  function perpendicularDistance(point, lineStart, lineEnd) {
+    const dx = lineEnd[0] - lineStart[0];
+    const dy = lineEnd[1] - lineStart[1];
+    const mag = Math.sqrt(dx * dx + dy * dy);
+    if (mag === 0) return Math.sqrt(Math.pow(point[0] - lineStart[0], 2) + Math.pow(point[1] - lineStart[1], 2));
+    
+    const u = ((point[0] - lineStart[0]) * dx + (point[1] - lineStart[1]) * dy) / (mag * mag);
+    const intersectionX = lineStart[0] + u * dx;
+    const intersectionY = lineStart[1] + u * dy;
+    
+    return Math.sqrt(Math.pow(point[0] - intersectionX, 2) + Math.pow(point[1] - intersectionY, 2));
+  }
+  
+  function douglasPeucker(points, epsilon) {
+    if (points.length <= 2) return points;
+    
+    let maxDist = 0;
+    let index = 0;
+    const end = points.length - 1;
+    
+    for (let i = 1; i < end; i++) {
+      const dist = perpendicularDistance(points[i], points[0], points[end]);
+      if (dist > maxDist) {
+        maxDist = dist;
+        index = i;
+      }
+    }
+    
+    if (maxDist > epsilon) {
+      const left = douglasPeucker(points.slice(0, index + 1), epsilon);
+      const right = douglasPeucker(points.slice(index), epsilon);
+      return left.slice(0, -1).concat(right);
+    } else {
+      return [points[0], points[end]];
+    }
+  }
+  
+  // Close the polygon temporarily for Douglas-Peucker
+  const closed = [...coords, coords[0]];
+  let simplified = douglasPeucker(closed, tolerance);
+  
+  // If still too many points, increase tolerance and try again
+  while (simplified.length > maxPoints && tolerance < 0.01) {
+    tolerance *= 1.5;
+    simplified = douglasPeucker(closed, tolerance);
+  }
+  
+  // Remove the duplicate closing point
+  simplified = simplified.slice(0, -1);
+  
+  // If still too many, fall back to uniform sampling
+  if (simplified.length > maxPoints) {
+    simplified = reducePolygonPoints(simplified, maxPoints);
+  }
+  
+  return simplified;
+}
+
+geoForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    const csvFile = document.getElementById("csvFile");
+
+    const button_name = e.submitter.getAttribute("name");
+    const csv_input = csvFile.files[0];
+    const reader = new FileReader();
+    
+    reader.onload = function (event) {
+        const string = event.target.result;
+        observations = CSV2Observations(string);
+
+        const obs_with_geo = observations.filter((obs) => (typeof obs.geo_lat !== "undefined" && typeof obs.geo_long !== "undefined"));
+
+        const alpha = parseFloat(document.getElementById("alpha").value);
+
+        let species = obs_with_geo
+            .map((obs) => obs.lat_name)
+            .filter((name) => name && name.trim().split(/\s+/).length > 1)
+            .map((name) => name.trim().split(/\s+/).slice(0, 2).join(' '));
+        species = [...new Set(species)].sort();
+        allSpecies = species;
+
+        // Initialize alpha values for all species
+        species.forEach((species_name) => {
+            if (!speciesAlphas[species_name]) {
+                speciesAlphas[species_name] = alpha;
+            }
+        });
+
+        const speciesSelect = document.getElementById("species");
+        // Clear existing options except "All"
+        speciesSelect.innerHTML = '<option value="all">All</option>';
+        species.forEach((species) => {
+            const option = document.createElement("option");
+            option.value = species;
+            option.textContent = abbreviateSpeciesName(species);
+            speciesSelect.appendChild(option);
+        });
+        speciesSelect.value = "all";
+        
+        console.log(species);
+        
+        // Collect all features for all species
+        features = [];
+        labels = [];
+        
+        for(let i=0; i<species.length; i++) {
+            const species_name = species[i];            
+            const species_obs = observations.filter((obs) => obs.lat_name && obs.lat_name.startsWith(species_name));
+            if(species_obs.length < 3) continue;
+
+            // Use shared calculation function
+            const result = calculateSpeciesFeatureAndLabel(species_name, species_obs, i);
+            
+            if (result) {
+                features.push(result.feature);
+                labels.push(result.label);
+            }
+        }
+        
+        // Draw all polygons on the map
+        if (features.length > 0 && rangeSeries) {
+            const geoJSON = {
+                type: "FeatureCollection",
+                features: features
+            };
+
+            console.log("Setting geoJSON with", features.length, "features");
+            rangeSeries.data.clear();
+            rangeSeries.set("geoJSON", geoJSON);
+            
+            // Draw labels
+            labelSeries.data.setAll(labels);
+        }
+        
+        // Generate the species table
+        generateSpeciesTable();
+
+        // Set up species dropdown filter
+        speciesSelect.onchange = function (e) {
+            const selectedSpecies = e.target.value;
+            console.log("Selected species:", selectedSpecies);
+            
+            if(selectedSpecies === "all") {
+                // Show all species ranges
+                const geoJSON = {
+                    type: "FeatureCollection",
+                    features: features
+                };
+                rangeSeries.data.clear();
+                rangeSeries.set("geoJSON", geoJSON);
+                
+                // Show all labels
+                labelSeries.data.setAll(labels);
+                
+                // Clear observation points
+                pointSeries.data.clear();
+            } else {
+                // Show only selected species range
+                const geoJSON = {
+                    type: "FeatureCollection",
+                    features: features.filter((feature) => feature.properties.name === selectedSpecies)
+                };
+                rangeSeries.data.clear();
+                rangeSeries.set("geoJSON", geoJSON);
+                
+                // Show label for selected species only
+                const selectedLabels = labels.filter((label) => label.name === abbreviateSpeciesName(selectedSpecies));
+                labelSeries.data.setAll(selectedLabels);
+                
+                // Show observation points for this species
+                const speciesObservations = observations.filter((obs) => 
+                    obs.lat_name && obs.lat_name.startsWith(selectedSpecies) &&
+                    typeof obs.geo_lat !== "undefined" && typeof obs.geo_long !== "undefined"
+                );
+                
+                const pointData = speciesObservations.map((obs) => ({
+                    geometry: {
+                        type: "Point",
+                        coordinates: [parseFloat(obs.geo_long), parseFloat(obs.geo_lat)]
+                    },
+                    tooltipText: obs.lat_name + (obs.date ? " (" + obs.date + ")" : "")
+                }));
+                
+                pointSeries.data.setAll(pointData);
+            }
+        };
+
+    };
+    reader.readAsText(csv_input);
+});
+
+</script>
+
+</body>
+</html>

@@ -38,7 +38,31 @@
         <span id="ebirdDownload"></span>
     </form>
     </td>
-</tr>
+    <td>
+        <table>
+            <tr>
+                <td>
+                    <form id="dbStore">
+                        <label>Store tax data in browser database:</label><br>
+                        <br />
+                        <input type="submit" name="read" value="Store" />
+                    </form>
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <form id="dbRestore">
+                        <label>Restore tax data from browser database:</label><br>
+                        <input type="file" id="dbFile" accept=".json" /><br />
+                        <br />
+                        <input type="submit" name="read" value="Restore" />
+                    </form>
+                </td>
+            </tr>
+        </table>
+    </td>
+    </tr>
+    </table>
 <tr id="description_tr">
     <td>
         Two main purposes:
@@ -47,11 +71,11 @@
         <li>Fetch tax data from iNats and cache it locally in your browser to use in other reports</li>
         </ul>
     </td>
-    <td>
-    </td>
+    <td></td>
     <td>
         Fetch the list of all observed birds in the region in eBirds and save it in the form of CSV checklist
     </td>
+    <td></td>
 </tr>
 </table>
 <div id="instruction"></div>
@@ -116,6 +140,46 @@ ebirdForm.addEventListener("submit", function (e) {
     const ebird_region = form.elements['ebird_region'].value;
 
     generateEbirdFetchingTable(ebird_key, ebird_region);
+});
+
+
+const dbStore = document.getElementById("dbStore");
+
+dbStore.addEventListener("submit", async function (e) {
+    e.preventDefault();
+
+    const taxIdMapCache = await getAllTaxIdMapCacheEntries();
+    const db_string_json = JSON.stringify(taxIdMapCache);
+
+    const db_blob = new Blob([db_string_json], { type: 'application/json' });
+    const db_url = URL.createObjectURL(db_blob);
+    const db_a = document.createElement("a");
+
+    db_a.setAttribute("href", db_url);
+    db_a.setAttribute("download", "tax_id_cache.json");
+    db_a.innerHTML = "Download tax_id_cache.json";
+
+    dbStore.parentNode.appendChild(db_a);    
+});
+
+const dbRestore = document.getElementById("dbRestore");
+
+dbRestore.addEventListener("submit", async function (e) {
+    e.preventDefault();
+    const dbFile = document.getElementById("dbFile");
+
+    const db_input = dbFile.files[0];
+    const reader = new FileReader();
+    
+    reader.onload = function (event) {
+        const db_string_json = event.target.result;
+    
+        const dbEntries = JSON.parse(db_string_json);
+        restoreTaxDataFromBrowserDatabase(dbEntries).then(() => {
+            dbRestore.parentNode.innerHTML = "Tax data restored from browser database";
+        });
+    };
+    reader.readAsText(db_input);
 });
 
 </script>

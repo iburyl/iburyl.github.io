@@ -92,3 +92,65 @@ async function addCardToTaxIdMapCache(transactionData, inat_tax_card)
         transactionData.objectStore.put({id: inat_tax_card.id, card: inat_tax_card});
     }
 }
+
+async function getAllTaxIdMapCacheEntries()
+{
+    return new Promise((resolve, reject) => 
+    {
+        let allEntries = [];
+        const objectStore = db.transaction("tax_id_cache").objectStore("tax_id_cache");
+        
+        objectStore.openCursor().addEventListener("success", (e) => {
+            const cursor = e.target.result;
+            
+            if (cursor) {
+                allEntries.push({id: cursor.value.id, card: cursor.value.card});
+                cursor.continue();
+            }
+            else {
+                console.log(`Retrieved ${allEntries.length} entries from DB`);
+                resolve(allEntries);
+            }
+        });
+        
+        objectStore.openCursor().addEventListener("error", (e) => {
+            console.error("Error retrieving entries from DB");
+            reject(e);
+        });
+    });
+}
+
+
+async function restoreTaxDataFromBrowserDatabase(entries)
+{
+    return new Promise((resolve, reject) => 
+    {
+        console.log(`Starting to restore ${entries.length} entries to DB...`);
+        
+        const transaction = db.transaction(["tax_id_cache"], "readwrite");
+        const objectStore = transaction.objectStore("tax_id_cache");
+
+        // Add each entry to the database
+        entries.forEach((entry) => {
+            objectStore.put(entry);
+        });
+
+        transaction.addEventListener("complete", () =>
+        {
+            console.log(`Successfully restored ${entries.length} entries to DB`);
+            resolve();
+        });
+
+        transaction.addEventListener("error", (e) =>
+        {
+            console.error("Transaction error while restoring entries:", e);
+            reject(e);
+        });
+
+        transaction.addEventListener("abort", (e) =>
+        {
+            console.error("Transaction aborted while restoring entries:", e);
+            reject(e);
+        });
+    });
+}
