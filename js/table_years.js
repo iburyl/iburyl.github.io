@@ -88,15 +88,15 @@ async function generateYearsTable( speciesMap, showUploadTime)
                 });
             };
 
-            let order = 'unknown';
+            let family = 'unknown';
             let export_table = '';
 
-            function addOrderToExport()
+            function addFamilyToExport()
             {
-                if(order === 'unknown') return;
+                if(family === 'unknown') return;
 
                 let export_tble_prefix = document.createElement("span");
-                export_tble_prefix.innerHTML = 'Order: ' + order;
+                export_tble_prefix.innerHTML = 'Family: ' + family;
 
                 export_div.appendChild(export_tble_prefix);
                 export_div.innerHTML += '\n';
@@ -132,11 +132,11 @@ async function generateYearsTable( speciesMap, showUploadTime)
                 else image_tag = tdFirstObserved[1];
                 let export_tdFileds = [image_tag, getCardTdSummary( card )[1], tdFirstObserved[0], '@' + tdFirstObserved[2], (tdFirstResearch[0] == '&larr;')?'':'to be confirmed' ];
 
-                if(order !== taxDetail[2].innerHTML)
+                if(family !== taxDetail[3].innerHTML)
                 {
-                    addOrderToExport();
+                    addFamilyToExport();
 
-                    order = taxDetail[2].innerHTML;
+                    family = taxDetail[3].innerHTML;
 
                     export_table = document.createElement("table");
                     export_table.id = "export_table_" + year;
@@ -157,7 +157,7 @@ async function generateYearsTable( speciesMap, showUploadTime)
                 first = false;
             } );
 
-            addOrderToExport();
+            addFamilyToExport();
         } );
     }
 }
