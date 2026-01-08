@@ -11,7 +11,7 @@ function CSV2Observations(string)
     var headers = CSVarrays[0];
     CSVarrays.shift();
 
-    const knownHeaderName = [ "user_login",  "url", "time_observed_at", "scientific_name", "common_name", "quality_grade", "observed_on", "id", "latitude", "longitude", "created_at"];
+    const knownHeaderName = [ "user_login",  "url", "time_observed_at", "scientific_name", "common_name", "quality_grade", "observed_on", "id", "latitude", "longitude", "created_at","image_url"];
     let   knownHeaderIdx  = [];
     
     for (let i = 0; i < headers.length; i++) {
@@ -32,6 +32,7 @@ function CSV2Observations(string)
     const i_geo_lat      =knownHeaderIdx[8];
     const i_geo_long     =knownHeaderIdx[9];
     const i_time_uploaded=knownHeaderIdx[10];
+    const i_image_url    =knownHeaderIdx[11];
     console.log(knownHeaderIdx);
 
     let observations = [];
@@ -106,6 +107,7 @@ function CSV2Observations(string)
             is_hybrid: is_hybrid,
             geo_lat: values[i_geo_lat],
             geo_long: values[i_geo_long],
+            image_url: values[i_image_url],
         };
 
         if (is_ssp)

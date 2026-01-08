@@ -43,7 +43,6 @@ function getObsTdSummary( obs, showUploadTime )
 
     if(typeof obs !== "undefined")
     {
-    
         let url  = obs.url;
         let href = `<a href='${url}'>link</a>`;
         let user = obs.user_id;
