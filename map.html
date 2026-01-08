@@ -33,11 +33,14 @@
 <h2 id="start">Map</h2>
 <div id="chartdiv"></div>
 
-<script type="text/javascript" src="js/csv_to_array.js"></script>
-<script type="text/javascript" src="js/lists_parsing.js"></script>
-<script type="text/javascript" src="js/utils.js"></script>
-<script type="text/javascript" src="js/utils_charts.js"></script>
-<script type="text/javascript" src="js/utils_stats.js"></script>
+<script>
+var JS_VERSION = Date.now();
+document.write('<script type="text/javascript" src="js/csv_to_array.js?v=' + JS_VERSION + '"><\/script>');
+document.write('<script type="text/javascript" src="js/lists_parsing.js?v=' + JS_VERSION + '"><\/script>');
+document.write('<script type="text/javascript" src="js/utils.js?v=' + JS_VERSION + '"><\/script>');
+document.write('<script type="text/javascript" src="js/utils_charts.js?v=' + JS_VERSION + '"><\/script>');
+document.write('<script type="text/javascript" src="js/utils_stats.js?v=' + JS_VERSION + '"><\/script>');
+</script>
 
 <script src="https://cdn.amcharts.com/lib/5/index.js"></script>
 <script src="https://cdn.amcharts.com/lib/5/map.js"></script>

@@ -83,14 +83,17 @@
 <div id="detail_div"></div>
 <table id="table_years"></table>
 
-<script type="text/javascript" src="js/csv_to_array.js"></script>
-<script type="text/javascript" src="js/lists_parsing.js"></script>
-<script type="text/javascript" src="js/storage_indexeddb_queries.js"></script>
-<script type="text/javascript" src="js/table_ebird_fetching.js"></script>
-<script type="text/javascript" src="js/table_project_fetching.js"></script>
-<script type="text/javascript" src="js/table_tax_fetching.js"></script>
-<script type="text/javascript" src="js/utils.js"></script>
-<script type="text/javascript" src="js/utils_tables.js"></script>
+<script>
+var JS_VERSION = Date.now();
+document.write('<script type="text/javascript" src="js/csv_to_array.js?v=' + JS_VERSION + '"><\/script>');
+document.write('<script type="text/javascript" src="js/lists_parsing.js?v=' + JS_VERSION + '"><\/script>');
+document.write('<script type="text/javascript" src="js/storage_indexeddb_queries.js?v=' + JS_VERSION + '"><\/script>');
+document.write('<script type="text/javascript" src="js/table_ebird_fetching.js?v=' + JS_VERSION + '"><\/script>');
+document.write('<script type="text/javascript" src="js/table_project_fetching.js?v=' + JS_VERSION + '"><\/script>');
+document.write('<script type="text/javascript" src="js/table_tax_fetching.js?v=' + JS_VERSION + '"><\/script>');
+document.write('<script type="text/javascript" src="js/utils.js?v=' + JS_VERSION + '"><\/script>');
+document.write('<script type="text/javascript" src="js/utils_tables.js?v=' + JS_VERSION + '"><\/script>');
+</script>
 
 <script>
 
