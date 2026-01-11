@@ -4,14 +4,14 @@ let global_per_hour_observations = [
     0,0,0, 0,0,0,
     0,0,0, 0,0,0, ];
 
-function CSV2Observations(string)
+function CSV2Observations(string, skipHigherTaxLevel = true)
 {
     const CSVarrays = CSVToArray(string);
     
     var headers = CSVarrays[0];
     CSVarrays.shift();
 
-    const knownHeaderName = [ "user_login",  "url", "time_observed_at", "scientific_name", "common_name", "quality_grade", "observed_on", "id", "latitude", "longitude", "created_at","image_url"];
+    const knownHeaderName = [ "user_login",  "url", "time_observed_at", "scientific_name", "common_name", "quality_grade", "observed_on", "id", "latitude", "longitude", "created_at","image_url","taxon_id"];
     let   knownHeaderIdx  = [];
     
     for (let i = 0; i < headers.length; i++) {
@@ -33,6 +33,7 @@ function CSV2Observations(string)
     const i_geo_long     =knownHeaderIdx[9];
     const i_time_uploaded=knownHeaderIdx[10];
     const i_image_url    =knownHeaderIdx[11];
+    const i_taxon_id     =knownHeaderIdx[12];
     console.log(knownHeaderIdx);
 
     let observations = [];
@@ -54,7 +55,7 @@ function CSV2Observations(string)
         }
         else
         {
-            continue;
+            continue;            
         }
 
         global_per_hour_observations[observed_time.getHours()]++;
@@ -75,7 +76,7 @@ function CSV2Observations(string)
         let lat_name_split = lat_name.split(" ");
         
         let is_identified = (lat_name_split.length >= 2);
-        if(!is_identified) continue;
+        if(!is_identified && skipHigherTaxLevel) continue;
 
         let is_hybrid = false;
         if( (lat_name_split.length == 3 && lat_name_split[1].length == 1) || lat_name_split.length > 3 )
@@ -97,12 +98,14 @@ function CSV2Observations(string)
             obs_id: values[i_id],
             user_id: values[i_user_login],
             name: values[i_lang_name],
+            taxon_id: values[i_taxon_id],
             lat_name_sp: lat_name,
             lat_name: values[i_lat_name],
             time: observed_time,
             upload_time: new Date(values[i_time_uploaded]),
             url: values[i_url],
             is_research: is_research,
+            is_at_least_sp: is_identified,
             is_ssp: is_ssp,
             is_hybrid: is_hybrid,
             geo_lat: values[i_geo_lat],
@@ -128,7 +131,7 @@ function CSV2Checklist(string)
     var headers = CSVarrays[0];
     CSVarrays.shift();
 
-    const knownHeaderName = ["scientific_name"];
+    const knownHeaderName = ["scientific_name", "taxon_id"];
     let   knownHeaderIdx  = [];
     
     for (let i = 0; i < headers.length; i++) {
@@ -139,7 +142,7 @@ function CSV2Checklist(string)
         }
     }
     const i_lat_name     =knownHeaderIdx[0];
-    console.log(knownHeaderIdx);
+    const i_taxon_id     =knownHeaderIdx[1];
 
     let entries = new Map();
 
@@ -152,6 +155,7 @@ function CSV2Checklist(string)
 
         let entry = {
             lat_name: lat_name,
+            taxon_id: values[i_taxon_id],
         };
 
         entries.set(lat_name, entry);

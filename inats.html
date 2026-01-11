@@ -9,13 +9,17 @@
    <form id="myForm">
    <table>
    <tr>
-     <td colspan="3" align="center">
+     <td colspan="4" align="center">
       Main CSV file (iNats format):<br />
       <input type="file" id="csvFile" accept=".csv" /><br />
      </td>
    </tr>
    <tr>
      <td>
+     </td>
+     <td>
+      Year:
+      <input type="number" name="year" id="year">
      </td>
      <td align="center">
       CSV file to compare (iNats format):<br />
@@ -33,6 +37,10 @@
        <option value="0">observation time</option>
        <option value="1">upload time</option>
       </select>
+     </td>
+     <td>
+      Project name:
+      <input type="text" name="projectName" id="projectName">
      </td>
      <td align="center">
       Filter:
@@ -60,6 +68,9 @@
       <input type="submit" name="main" value="New species by year report" />
      </td>
      <td align="center">
+      <input type="submit" name="year" value="Year report" />
+     </td>
+     <td align="center">
       <input type="submit" name="compare" value="Comparison report" />
      </td>
      <td align="center">
@@ -72,6 +83,7 @@
       Species are sorted by first observation and grouped by year of the first observation.<br /><br />
       Shows the progress in discovering new species over the years.
      </td>
+     <td></td>
      <td>
       Species are sorted by number of observations in Main CSV, the last observation from compared CSV is shown (or line is greyed out). Followed by list of species available only in Compared CSV.<br /><br />
       Shows whether species from Main CSV were already covered with compared CSV. (e.g. for finding species in the region (Main CSV), which are not yet found by individual (Compared CSV))
@@ -101,7 +113,9 @@ iNats CSV files are compatible with Checklist format, but only single column is 
 </div>
 
    <div id="detail_div"></div>
+   <div id="main_report_div">
    <table id="table_years"></table>
+   </div
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
@@ -114,6 +128,7 @@ document.write('<script type="text/javascript" src="js/storage_indexeddb_queries
 document.write('<script type="text/javascript" src="js/table_compare_with_checklist.js?v=' + JS_VERSION + '"><\/script>');
 document.write('<script type="text/javascript" src="js/table_compare_with_list.js?v=' + JS_VERSION + '"><\/script>');
 document.write('<script type="text/javascript" src="js/table_years.js?v=' + JS_VERSION + '"><\/script>');
+document.write('<script type="text/javascript" src="js/table_year_summary.js?v=' + JS_VERSION + '"><\/script>');
 document.write('<script type="text/javascript" src="js/utils.js?v=' + JS_VERSION + '"><\/script>');
 document.write('<script type="text/javascript" src="js/utils_category.js?v=' + JS_VERSION + '"><\/script>');
 document.write('<script type="text/javascript" src="js/utils_charts.js?v=' + JS_VERSION + '"><\/script>');
@@ -128,6 +143,8 @@ const csvFile = document.getElementById("csvFile");
 const csvFileCompare = document.getElementById("csvFileCompare");
 const monthsFilter = document.getElementById("monthsSelect");
 const showTimeSelect = document.getElementById("showTime");
+const yearInput = document.getElementById("year");
+const projectNameInput = document.getElementById("projectName");
 
 myForm.addEventListener("submit", function (e) {
    e.preventDefault();
@@ -145,6 +162,12 @@ myForm.addEventListener("submit", function (e) {
       if( button_name == "main" )
       {
          generateYearsTable( speciesMap, showTimeSelect.value == 1 );
+      }
+      else if( button_name == "year" )
+      {
+         const yearSummaryObservations = CSV2Observations(string, false);
+         const yearSummarySpeciesMap = Observations2SpeciesMap(yearSummaryObservations);
+         generateYearSummaryReport( yearSummaryObservations, yearSummarySpeciesMap, yearInput.value, projectNameInput.value );
       }
       else if( button_name == "compare" )
       {

@@ -1,4 +1,73 @@
-async function queryAncestors(main_inat_card, taxIdMapCache)
+async function queryTaxById(tax_id, lat_name, taxLatNameMapCache, taxIdMapCache)
+{
+    if(tax_id=='' || isNaN(Number(tax_id))) return Promise.reject(new Error('Tax ID is not a number'));
+    
+    console.log("Fetching: " + tax_id);
+    const params = new URLSearchParams({
+        id: tax_id,
+        is_active: true
+    });
+
+    return fetchAsync('https://api.inaturalist.org/v1/taxa?locale=ru&'+params.toString().replaceAll('+','%20')).then(async (data) =>
+    {
+        console.log("Main query done", data);
+
+        let transaction = await startTaxIdMapCacheUpdate(taxIdMapCache);
+        let promises = [];
+        
+        data.results.forEach((inat_tax_card) =>
+        {
+            console.log(inat_tax_card.name, lat_name);
+            if( inat_tax_card.name == lat_name )
+            {
+                inat_tax_card.locale = 'ru';
+                promises.push( addCardToTaxIdMapCache(transaction, inat_tax_card) );
+                updateTaxLatNameMapCache(taxLatNameMapCache, inat_tax_card);
+            }
+        });
+
+        if(promises.length == 0) return Promise.reject(new Error('Tax not found'));
+
+        return Promise.all( promises ).then(() => {
+            finalizeTaxIdMapCacheUpdate(transaction);
+        });
+    });
+}
+
+async function queryTaxByName(lat_name, taxLatNameMapCache, taxIdMapCache)
+{
+    console.log("Fetching: " + lat_name);
+    const params = new URLSearchParams({
+        q: lat_name,
+        is_active: true,
+        order: 'desc',
+        order_by: 'observations_count',
+    });
+
+    return fetchAsync('https://api.inaturalist.org/v1/taxa?locale=ru&'+params.toString().replaceAll('+','%20')).then(async (data) =>
+    {
+        console.log("Main query done", data);
+
+        let transaction = await startTaxIdMapCacheUpdate(taxIdMapCache);
+        let promises = [];
+        
+        data.results.forEach((inat_tax_card) =>
+        {
+            if( inat_tax_card.name == lat_name )
+            {
+                inat_tax_card.locale = 'ru';
+                promises.push( addCardToTaxIdMapCache(transaction, inat_tax_card) );
+                updateTaxLatNameMapCache(taxLatNameMapCache, inat_tax_card);
+            }
+        });
+
+        return Promise.all( promises ).then(() => {
+            finalizeTaxIdMapCacheUpdate(transaction);
+        });
+    });
+}
+
+async function queryAncestors(main_inat_card, taxLatNameMapCache, taxIdMapCache)
 {
     let query_ids = '';
 
@@ -25,11 +94,14 @@ async function queryAncestors(main_inat_card, taxIdMapCache)
         
         data.results.forEach((inat_tax_card) =>
         {
+            inat_tax_card.locale = 'en';
             promises.push( addCardToTaxIdMapCache(transaction, inat_tax_card) );
+            updateTaxLatNameMapCache(taxLatNameMapCache, inat_tax_card);
         });
 
-        await Promise.all( promises );
-        await finalizeTaxIdMapCacheUpdate(transaction);
+        return Promise.all( promises ).then(() => {
+            finalizeTaxIdMapCacheUpdate(transaction);
+        });
     });
 }
 
@@ -42,10 +114,10 @@ async function generateChecklistFetchingTable( checklistMap )
     fetch.innerHTML = 'fetch';
 
     table_years.appendChild(createTr(
-               [['rowspan',2,'#'], 'name',['rowspan',2,fetch],['colspan',9,'iNats tax']]));
+               [['rowspan',2,'#'], ['colspan',2,'name'],['rowspan',2,fetch],['colspan',10,'iNats tax']]));
 
     table_years.appendChild(createTr(
-               ['latin', 'kingdom','class','order','family','species','name','ru name','id','obs']));
+               ['latin','known tax_id', 'kingdom','class','order','family','species','name','ru name','id','obs','rank']));
 
     let taxIdMapCache = await getTaxIdMapCache();
     let taxLatNameMapCache = taxIdMap2taxLatNameMap(taxIdMapCache);
@@ -58,15 +130,22 @@ async function generateChecklistFetchingTable( checklistMap )
         let button = document.createElement("span");
         all_buttons.push( button );
 
-        let taxDetail = [getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan()];
+        const has_known_tax_id = entry.taxon_id != '' && typeof entry.taxon_id != 'undefined';
+        
+        let taxDetail = [getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan()];
 
-        let tdFileds = [i, "<a href='https://www.inaturalist.org/search?q="+lat_name.replace(' ','%20')+"'>"+lat_name+"</a>",button,...taxDetail];
+        let tdFileds = [
+            i,
+            "<a href='https://www.inaturalist.org/search?q="+lat_name.replace(' ','%20')+"'>"+lat_name+"</a>",
+            has_known_tax_id ? entry.taxon_id : '',
+            button,
+            ...taxDetail];
 
         table_years.appendChild( createTr( tdFileds ) );
 
         i++;
 
-        if(lat_name.split(' ').length < 2) return;
+        if(lat_name.split(' ').length < 2 && !has_known_tax_id) return;
 
         if(!taxLatNameMapCache.has(lat_name))
         {
@@ -74,7 +153,7 @@ async function generateChecklistFetchingTable( checklistMap )
         }
         else
         {
-            let main_inat_card = fillMainTaxDetails(lat_name, taxDetail, taxLatNameMapCache, taxIdMapCache);
+            let main_inat_card = fillMainTaxDetailsEx(lat_name, entry.taxon_id, taxDetail, taxLatNameMapCache, taxIdMapCache);
 
             if(typeof main_inat_card != "undefined")
             {
@@ -92,42 +171,10 @@ async function generateChecklistFetchingTable( checklistMap )
         }
         
         button.addEventListener("click", (event) => {
-            console.log("Fetching: " + lat_name);
-            const params = new URLSearchParams({
-                q: lat_name,
-                is_active: true,
-                order: 'desc',
-                order_by: 'observations_count',
-            });
-
-            fetchAsync('https://api.inaturalist.org/v1/taxa?locale=ru&'+params.toString().replaceAll('+','%20')).then(async (data) =>
-            {
-                console.log("Main query done");
-                let named_entries = [];
-
-                let transaction = await startTaxIdMapCacheUpdate(taxIdMapCache);
-                let promises = [];
-                
-                data.results.forEach((inat_tax_card) =>
-                {
-                    if( inat_tax_card.name == lat_name )
-                    {
-                        promises.push( addCardToTaxIdMapCache(transaction, inat_tax_card) );
-                        
-                        if( taxLatNameMapCache.has( lat_name ) )
-                        {
-                            named_entries = taxLatNameMapCache.get( lat_name );
-                        }
-
-                        named_entries.push( inat_tax_card );
-                        taxLatNameMapCache.set( lat_name, named_entries );
-                    }
-                });
-
-                await Promise.all( promises );
-
-                await finalizeTaxIdMapCacheUpdate(transaction);
-
+            queryTaxById(entry.taxon_id, lat_name, taxLatNameMapCache, taxIdMapCache)
+            .catch(async () => { console.log('Tax not found by ID, trying by name'); return queryTaxByName(lat_name, taxLatNameMapCache, taxIdMapCache); })
+            .then(async () => {
+                console.log('Tax fetched');
                 let main_inat_card = fillMainTaxDetails(lat_name, taxDetail, taxLatNameMapCache, taxIdMapCache);
 
                 if(typeof main_inat_card != "undefined")
@@ -135,13 +182,13 @@ async function generateChecklistFetchingTable( checklistMap )
                     let found = fillAncestorTaxDetails(main_inat_card, taxDetail, taxIdMapCache);
                     if(!found)
                     {
-                        await queryAncestors(main_inat_card, taxIdMapCache);
-                        fillAncestorTaxDetails(main_inat_card, taxDetail, taxIdMapCache);
+                        await queryAncestors(main_inat_card, taxLatNameMapCache, taxIdMapCache);
+                        await fillAncestorTaxDetails(main_inat_card, taxDetail, taxIdMapCache);
                     }
                 }
 
                 button.remove();
-            });
+                });          
         });
     } );
 
@@ -165,6 +212,6 @@ async function generateChecklistFetchingTable( checklistMap )
             }
             j++;
         }
-        intervalId = setInterval(clicker, 2000);
+        intervalId = setInterval(clicker, 1000);
     });
 }
