@@ -116,7 +116,10 @@ window.IR = window.IR || {};
                 `&id_above=${id_above}&fields=${OBS_FIELDS}`;
 
             const data = await fetchJson(url);
-            if (typeof data.total_results === 'number') total = data.total_results;
+            // With id_above pagination total_results is the count *remaining above*
+            // the current id (it shrinks each page), so the grand total is only the
+            // value from the first request (id_above === 0).
+            if (total === null && typeof data.total_results === 'number') total = data.total_results;
             if (!data.results || !data.results.length) break;
 
             data.results.forEach((o) => {
