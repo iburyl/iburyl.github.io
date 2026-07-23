@@ -1,5 +1,29 @@
 
 
+// Helper function to get taxonomy level index from taxDetail array
+function getTaxonomyLevelIndex(taxonomyLevel) {
+    const levelMap = {
+        'kingdom': 0,
+        'class': 1,
+        'order': 2,
+        'family': 3
+    };
+    return levelMap[taxonomyLevel] || 3; // Default to family if invalid
+}
+
+// Helper function to get genus from scientific name or taxon card
+function getGenus(main_inat_card, scientificName) {
+    // If the card is already at genus level, return its name
+    if (main_inat_card && main_inat_card.rank === 'genus') {
+        return main_inat_card.name;
+    }
+    // Otherwise, extract genus (first word) from scientific name
+    if (scientificName && scientificName.length > 0) {
+        return scientificName.split(' ')[0];
+    }
+    return '';
+}
+
 // Helper function to create a title with copy functionality
 function createTitleWithCopy(titleText, titleId, getHtmlContentFunc) {
     const titleElement = document.createElement("h2");
@@ -83,28 +107,23 @@ function hasChildrenWithLowerRank(parent_tax_id, parent_rank_level, all_tax_card
 }
 
 // Helper function to build tax normalization map for a specific year
-function buildTaxNormalizationMapForYear(year_observations, taxIdMapCache, taxLatNameMapCache) {
-        let tax_normalization_map = new Map();
-        let unknown_tax = 0;
-        
-        // First pass: collect all tax_ids and their rank levels for this year
-        let all_tax_cards = new Map();
+function buildTaxNormalizationMap(observations, taxIdMapCache, taxLatNameMapCache) {
+    let tax_normalization_map = new Map();
+    let unknown_tax = 0;
     
-        year_observations.forEach(obs => {
-            const taxon_id = Number(obs.taxon_id);
-            
-            if(all_tax_cards.has(taxon_id)) return;
-            
-            let taxDetail = [getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan()];
-            let main_inat_card = fillMainTaxDetailsEx(obs.lat_name, obs.taxon_id, taxDetail, taxLatNameMapCache, taxIdMapCache);
-            
-            if(typeof main_inat_card == "undefined")
-            {
-                unknown_tax++;
-                return;
-            }
-            
-        all_tax_cards.set(taxon_id, main_inat_card);
+    // First pass: collect all tax_ids and their rank levels
+    let all_tax_cards = new Map();
+
+    observations.forEach(obs => {
+        const taxon_id = Number(obs.taxon_id);
+        
+        if(all_tax_cards.has(taxon_id)) {unknown_tax++; return;}
+        
+        let tax_details = getTaxDetailsFromId(taxon_id, false, taxIdMapCache);
+        
+        if(typeof tax_details == "undefined") {unknown_tax++; return;}
+        
+        all_tax_cards.set(taxon_id, tax_details);
     });
 
     // Sort taxa by rank_level (descending: higher ranks first, then species, then subspecies)
@@ -155,7 +174,7 @@ function buildTaxNormalizationMapForYear(year_observations, taxIdMapCache, taxLa
     return tax_normalization_map;
 }
 
-async function generateYearSummaryReport( observations, speciesMap, targetYear, projectName)
+async function generateYearSummaryReport( observations, speciesMap, targetYear, projectName, taxonomyLevel)
 {
     targetYear = parseInt(targetYear);
 
@@ -171,8 +190,9 @@ async function generateYearSummaryReport( observations, speciesMap, targetYear, 
     // Generate all tables
     generateSummaryStatsTable(targetYear, observations, taxIdMapCache, taxLatNameMapCache, projectName);
     generateTopObserversTable(targetYear, observations, taxIdMapCache, taxLatNameMapCache);
-    generateMissingSpeciesTable(targetYear, observations, taxIdMapCache, taxLatNameMapCache);
-    generateNewSpeciesTable(targetYear, observations, taxIdMapCache, taxLatNameMapCache);
+    generateTopObserversPerTaxonomyTable(targetYear, taxonomyLevel, observations, taxIdMapCache, taxLatNameMapCache);
+    generateMissingSpeciesTable(targetYear, taxonomyLevel, observations, taxIdMapCache, taxLatNameMapCache);
+    generateNewSpeciesTable(targetYear, taxonomyLevel, observations, taxIdMapCache, taxLatNameMapCache);
 }
 
 // Function to generate the summary statistics table (5 years)
@@ -188,7 +208,7 @@ function generateSummaryStatsTable(targetYear, observations, taxIdMapCache, taxL
         const year_observations = observations.filter(obs => obs.time.getFullYear() === year);
         
         // Build tax normalization map for this specific year
-        const tax_normalization_map = buildTaxNormalizationMapForYear(year_observations, taxIdMapCache, taxLatNameMapCache);
+        const tax_normalization_map = buildTaxNormalizationMap(year_observations, taxIdMapCache, taxLatNameMapCache);
         
         const stats = {
             year: year,
@@ -299,9 +319,9 @@ function generateTopObserversTable(targetYear, observations, taxIdMapCache, taxL
     const obsCurrent = observations.filter(obs => obs.time.getFullYear() === currentYear);
     const obsPrevious = observations.filter(obs => obs.time.getFullYear() === previousYear);
     const obsTwoYearsAgo = observations.filter(obs => obs.time.getFullYear() === twoYearsAgo);
-    const taxMapCurrent = buildTaxNormalizationMapForYear(obsCurrent, taxIdMapCache, taxLatNameMapCache);
-    const taxMapPrevious = buildTaxNormalizationMapForYear(obsPrevious, taxIdMapCache, taxLatNameMapCache);
-    const taxMapTwoYearsAgo = buildTaxNormalizationMapForYear(obsTwoYearsAgo, taxIdMapCache, taxLatNameMapCache);
+    const taxMapCurrent = buildTaxNormalizationMap(obsCurrent, taxIdMapCache, taxLatNameMapCache);
+    const taxMapPrevious = buildTaxNormalizationMap(obsPrevious, taxIdMapCache, taxLatNameMapCache);
+    const taxMapTwoYearsAgo = buildTaxNormalizationMap(obsTwoYearsAgo, taxIdMapCache, taxLatNameMapCache);
     
     // Calculate observer stats for current year
     const observersCurrent = new Map();
@@ -404,7 +424,7 @@ function generateTopObserversTable(targetYear, observations, taxIdMapCache, taxL
     const table_observers = document.createElement("table");
     
     const title_observers = createTitleWithCopy(
-        `Top 10 Observers in ${currentYear}`,
+        `Top Observers in ${currentYear}`,
         "observers_title",
         () => table_observers.outerHTML
     );
@@ -447,12 +467,132 @@ function generateTopObserversTable(targetYear, observations, taxIdMapCache, taxL
     }
 }
 
+// Function to generate top observers per taxonomy level table
+async function generateTopObserversPerTaxonomyTable(targetYear, taxonomyLevel, observations, taxIdMapCache, taxLatNameMapCache) {
+    targetYear = parseInt(targetYear);
+    
+    // Build tax normalization map for target year
+    const targetYearObservations = observations.filter(obs => obs.time.getFullYear() === targetYear);
+    const tax_normalization_map = buildTaxNormalizationMap(targetYearObservations, taxIdMapCache, taxLatNameMapCache);
+    
+    // Collect all taxonomy groups and their observers
+    const taxonomyObservers = new Map(); // Map<taxonomyName, Map<observer, Set<species>>>
+    
+    targetYearObservations.forEach(obs => {
+        if (!obs.taxon_id) return;
+        
+        const taxon_id = Number(obs.taxon_id);
+        
+        if (!tax_normalization_map.has(taxon_id)) return;
+        
+        const normalized_tax_id = tax_normalization_map.get(taxon_id);
+        
+        // Get taxonomy details
+        let taxDetail = [getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan(),getSpan()];
+        let main_inat_card = fillMainTaxDetailsEx(obs.lat_name, obs.taxon_id, taxDetail, taxLatNameMapCache, taxIdMapCache);
+        
+        if(typeof main_inat_card === "undefined") return;
+        
+        fillAncestorTaxDetails(main_inat_card, taxDetail, taxIdMapCache);
+        
+        // Get the taxonomy name based on the specified level
+        let taxonomyName = '';
+        if (taxonomyLevel === 'genus') {
+            taxonomyName = getGenus(main_inat_card, obs.lat_name);
+        } else {
+            const levelIndex = getTaxonomyLevelIndex(taxonomyLevel);
+            taxonomyName = taxDetail[levelIndex].innerHTML;
+        }
+        
+        if (!taxonomyName || taxonomyName === '') return;
+        
+        // Initialize taxonomy group if needed
+        if (!taxonomyObservers.has(taxonomyName)) {
+            taxonomyObservers.set(taxonomyName, new Map());
+        }
+        
+        const observersInTaxonomy = taxonomyObservers.get(taxonomyName);
+        const observer = obs.user_id;
+        
+        // Initialize observer if needed
+        if (!observersInTaxonomy.has(observer)) {
+            observersInTaxonomy.set(observer, new Set());
+        }
+        
+        // Add species to observer's set
+        observersInTaxonomy.get(observer).add(normalized_tax_id);
+    });
+    
+    // Build table data: for each taxonomy, find the observer with most species
+    const tableData = [];
+    
+    taxonomyObservers.forEach((observersMap, taxonomyName) => {
+        // Find observer with maximum species in this taxonomy
+        let topObserver = null;
+        let maxSpecies = 0;
+        
+        observersMap.forEach((speciesSet, observer) => {
+            if (speciesSet.size > maxSpecies) {
+                maxSpecies = speciesSet.size;
+                topObserver = observer;
+            }
+        });
+        
+        if (topObserver) {
+            tableData.push({
+                taxonomy: taxonomyName,
+                taxon_id: taxon_id,
+                observer: topObserver,
+                species: maxSpecies
+            });
+        }
+    });
+    
+    // Sort by taxonomy name
+    tableData.sort((a, b) => a.taxonomy.localeCompare(b.taxonomy));
+    
+    // Create title
+    const taxonomyLevelCapitalized = taxonomyLevel.charAt(0).toUpperCase() + taxonomyLevel.slice(1);
+    const table_taxonomy_observers = document.createElement("table");
+    
+    const title_taxonomy_observers = createTitleWithCopy(
+        `Top Observer per ${taxonomyLevelCapitalized} in ${targetYear}`,
+        "taxonomy_observers_title",
+        () => table_taxonomy_observers.outerHTML
+    );
+    
+    // Add table header
+    table_taxonomy_observers.appendChild(createThead([createTr([
+        taxonomyLevelCapitalized,
+        'top observer',
+        'species'
+    ])]));
+    
+    // Add rows
+    tableData.forEach(item => {
+        const tdFields = [
+            item.taxonomy,
+            '@' + item.observer,
+            `<a href='https://www.inaturalist.org/observations?d1=${targetYear}-01-01&d2=${targetYear}-12-31&project_id=moths-of-oregon&taxon_id=${item.taxon_id}&user_id=${item.observer}' target='_blank'>${item.species}</a>`
+        ];
+        
+        table_taxonomy_observers.appendChild(createTr(tdFields));
+    });
+    
+    // Append to main report div
+    const main_report_div = document.getElementById("main_report_div");
+    if (main_report_div) {
+        main_report_div.appendChild(title_taxonomy_observers);
+        main_report_div.appendChild(table_taxonomy_observers);
+    }
+}
+
 // Function to generate the new species table (species first observed in target year)
-async function generateNewSpeciesTable(targetYear, observations, taxIdMapCache, taxLatNameMapCache) {
+async function generateNewSpeciesTable(targetYear, taxonomyLevel, observations, taxIdMapCache, taxLatNameMapCache) {
     targetYear = parseInt(targetYear);
     
     // Build tax normalization map over all years
-    const tax_normalization_map = buildTaxNormalizationMapForYear(observations, taxIdMapCache, taxLatNameMapCache);
+    const tax_normalization_map = buildTaxNormalizationMap(observations, taxIdMapCache, taxLatNameMapCache);
     
     // Find first observation for each normalized species (across all years)
     const speciesFirstObservation = new Map();
@@ -534,8 +674,8 @@ async function generateNewSpeciesTable(targetYear, observations, taxIdMapCache, 
         }
     );
     
-    // Group observations by family
-    const familyGroups = new Map();
+    // Group observations by taxonomy level
+    const taxonomyGroups = new Map();
     
     newSpeciesObservations.forEach(item => {
         const obs = item.observation;
@@ -547,12 +687,20 @@ async function generateNewSpeciesTable(targetYear, observations, taxIdMapCache, 
             fillAncestorTaxDetails(main_inat_card, taxDetail, taxIdMapCache);
         }
         
-        const family = taxDetail[3].innerHTML;
-        if (family && family !== '') {
-            if (!familyGroups.has(family)) {
-                familyGroups.set(family, []);
+        // Get the taxonomy name based on the specified level
+        let taxonomyName = '';
+        if (taxonomyLevel === 'genus') {
+            taxonomyName = getGenus(main_inat_card, obs.lat_name);
+        } else {
+            const levelIndex = getTaxonomyLevelIndex(taxonomyLevel);
+            taxonomyName = taxDetail[levelIndex].innerHTML;
+        }
+        
+        if (taxonomyName && taxonomyName !== '') {
+            if (!taxonomyGroups.has(taxonomyName)) {
+                taxonomyGroups.set(taxonomyName, []);
             }
-            familyGroups.get(family).push({ item, taxDetail });
+            taxonomyGroups.get(taxonomyName).push({ item, taxDetail });
         }
     });
     
@@ -561,24 +709,24 @@ async function generateNewSpeciesTable(targetYear, observations, taxIdMapCache, 
     if (main_report_div) {
         main_report_div.appendChild(title_new_species);
         
-        // Create a separate table for each family
-        familyGroups.forEach((speciesInFamily, family) => {
-            // Create family header
-            const familyHeader = document.createElement("h3");
-            familyHeader.innerHTML = family;
-            main_report_div.appendChild(familyHeader);
+        // Create a separate table for each taxonomy group
+        taxonomyGroups.forEach((speciesInGroup, taxonomyName) => {
+            // Create taxonomy group header
+            const groupHeader = document.createElement("h3");
+            groupHeader.innerHTML = taxonomyName;
+            main_report_div.appendChild(groupHeader);
             
-            // Create table for this family
-            const table_family = document.createElement("table");
-            table_family.className = "table_new_species_family";
+            // Create table for this taxonomy group
+            const table_group = document.createElement("table");
+            table_group.className = "table_new_species_family";
             
             // Add table header
-            table_family.appendChild(createThead([createTr(
+            table_group.appendChild(createThead([createTr(
                 ['observation', 'scientific name', 'date', 'observer', 'comment' ]
             )]));
             
             // Add species rows
-            speciesInFamily.forEach(({ item, taxDetail }) => {
+            speciesInGroup.forEach(({ item, taxDetail }) => {
                 const obs = item.observation;
                 
                 // Get observation details
@@ -599,20 +747,20 @@ async function generateNewSpeciesTable(targetYear, observations, taxIdMapCache, 
                     obs.is_research ? '' : 'to be confirmed'
                 ];
                 
-                table_family.appendChild(createTr(tdFields));
+                table_group.appendChild(createTr(tdFields));
             });
             
-            main_report_div.appendChild(table_family);
+            main_report_div.appendChild(table_group);
         });
     }
 }
 
 // Function to generate the missing species table (species observed in last 3 years but not in target year)
-async function generateMissingSpeciesTable(targetYear, observations, taxIdMapCache, taxLatNameMapCache) {
+async function generateMissingSpeciesTable(targetYear, taxonomyLevel, observations, taxIdMapCache, taxLatNameMapCache) {
     targetYear = parseInt(targetYear);
     
     // Build tax normalization map over all years (global)
-    const tax_normalization_map = buildTaxNormalizationMapForYear(observations, taxIdMapCache, taxLatNameMapCache);
+    const tax_normalization_map = buildTaxNormalizationMap(observations, taxIdMapCache, taxLatNameMapCache);
     
     // Get species observed in each year
     const speciesInYear = new Map(); // year -> Set of normalized tax_ids
@@ -726,8 +874,8 @@ async function generateMissingSpeciesTable(targetYear, observations, taxIdMapCac
         }
     );
     
-    // Group observations by family
-    const familyGroups = new Map();
+    // Group observations by taxonomy level
+    const taxonomyGroups = new Map();
     
     missingSpecies.forEach(item => {
         const obs = item.lastObservation;
@@ -739,12 +887,20 @@ async function generateMissingSpeciesTable(targetYear, observations, taxIdMapCac
             fillAncestorTaxDetails(main_inat_card, taxDetail, taxIdMapCache);
         }
         
-        const family = taxDetail[3].innerHTML;
-        if (family && family !== '') {
-            if (!familyGroups.has(family)) {
-                familyGroups.set(family, []);
+        // Get the taxonomy name based on the specified level
+        let taxonomyName = '';
+        if (taxonomyLevel === 'genus') {
+            taxonomyName = getGenus(main_inat_card, obs.lat_name);
+        } else {
+            const levelIndex = getTaxonomyLevelIndex(taxonomyLevel);
+            taxonomyName = taxDetail[levelIndex].innerHTML;
+        }
+        
+        if (taxonomyName && taxonomyName !== '') {
+            if (!taxonomyGroups.has(taxonomyName)) {
+                taxonomyGroups.set(taxonomyName, []);
             }
-            familyGroups.get(family).push({ item, taxDetail });
+            taxonomyGroups.get(taxonomyName).push({ item, taxDetail });
         }
     });
     
@@ -753,24 +909,24 @@ async function generateMissingSpeciesTable(targetYear, observations, taxIdMapCac
     if (main_report_div) {
         main_report_div.appendChild(title_missing_species);
         
-        // Create a separate table for each family
-        familyGroups.forEach((speciesInFamily, family) => {
-            // Create family header
-            const familyHeader = document.createElement("h3");
-            familyHeader.innerHTML = family;
-            main_report_div.appendChild(familyHeader);
+        // Create a separate table for each taxonomy group
+        taxonomyGroups.forEach((speciesInGroup, taxonomyName) => {
+            // Create taxonomy group header
+            const groupHeader = document.createElement("h3");
+            groupHeader.innerHTML = taxonomyName;
+            main_report_div.appendChild(groupHeader);
             
-            // Create table for this family
-            const table_family = document.createElement("table");
-            table_family.className = "table_missing_species_family";
+            // Create table for this taxonomy group
+            const table_group = document.createElement("table");
+            table_group.className = "table_missing_species_family";
             
             // Add table header
-            table_family.appendChild(createThead([createTr(
+            table_group.appendChild(createThead([createTr(
                 ['observation', 'scientific name', 'last seen', 'observer', 'comment' ]
             )]));
             
             // Add species rows
-            speciesInFamily.forEach(({ item, taxDetail }) => {
+            speciesInGroup.forEach(({ item, taxDetail }) => {
                 const obs = item.lastObservation;
                 
                 // Get observation details
@@ -791,10 +947,10 @@ async function generateMissingSpeciesTable(targetYear, observations, taxIdMapCac
                     obs.is_research ? '' : 'to be confirmed'
                 ];
                 
-                table_family.appendChild(createTr(tdFields));
+                table_group.appendChild(createTr(tdFields));
             });
             
-            main_report_div.appendChild(table_family);
+            main_report_div.appendChild(table_group);
         });
     }
 }

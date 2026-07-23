@@ -56,91 +56,48 @@ function getObsTdSummary( obs, showUploadTime )
     }
 }
 
-function fillAncestorTaxDetails(main_inat_card, taxDetail, taxIdMapCache)
+function getTaxIdFromName(lat_name, taxLatNameMapCache)
 {
-    let query_ids = '';
+    if(!taxLatNameMapCache.has(lat_name)) return;
 
-    if(main_inat_card.rank == 'kingdom') taxDetail[0].innerHTML = main_inat_card.name;
-    if(main_inat_card.rank == 'class')   taxDetail[1].innerHTML = main_inat_card.name;
-    if(main_inat_card.rank == 'order')   taxDetail[2].innerHTML = main_inat_card.name;
-    if(main_inat_card.rank == 'family')  taxDetail[3].innerHTML = main_inat_card.name;
-
-    main_inat_card.ancestor_ids.forEach((ancestor_id) =>
-    {
-        if(taxIdMapCache.has(ancestor_id))
-        {
-            let ancestor_card = taxIdMapCache.get(ancestor_id);
-
-            if(ancestor_card.rank == 'kingdom') taxDetail[0].innerHTML = ancestor_card.name;
-            if(ancestor_card.rank == 'class')   taxDetail[1].innerHTML = ancestor_card.name;
-            if(ancestor_card.rank == 'order')   taxDetail[2].innerHTML = ancestor_card.name;
-            if(ancestor_card.rank == 'family')  taxDetail[3].innerHTML = ancestor_card.name;
-        }
-    } );
-
-/**
- * ranks are: 70 (kingdom), 60 (phylum), 50 (class), 40 (order), 30 (family), 20 (genus), 10 (species), 5 (subspecies)
- */
-
-    let everything_found =
-        (taxDetail[0].innerHTML.length > 0 || main_inat_card.rank_level >= 70) &&
-        (taxDetail[1].innerHTML.length > 0 || main_inat_card.rank_level >= 50) &&
-        (taxDetail[2].innerHTML.length > 0 || main_inat_card.rank_level >= 40) &&
-        (taxDetail[3].innerHTML.length > 0 || main_inat_card.rank_level >= 30) &&
-        true;
-
-    return everything_found;
-}
-
-function fillMainTaxDetailsEx(lat_name, known_tax_id, taxDetail, taxLatNameMapCache, taxIdMapCache)
-{
-    if(typeof known_tax_id == 'string') known_tax_id = Number(known_tax_id);
+    const inat_cards = taxLatNameMapCache.get(lat_name);
 
     let main_inat_card;
+    let lowest_rank_card = inat_cards[0];
 
-    if(known_tax_id && taxIdMapCache.has(known_tax_id))
+    for(let j=0; j<inat_cards.length; j++)
     {
-        const inat_card_by_id = taxIdMapCache.get(known_tax_id);
-        if(inat_card_by_id.name == lat_name)
+        if(inat_cards[j].rank_level < lowest_rank_card.rank_level)
         {
-            main_inat_card = inat_card_by_id;
+            lowest_rank_card = inat_cards[j];
+        }
+
+        // assuming that they are sorted from higher to lower observations,
+        // which makes first found - most likely to be the main one
+        if(inat_cards[j].rank_level <= 10)
+        {
+            main_inat_card = inat_cards[j];    
+            break;
         }
     }
 
-    if(typeof main_inat_card === "undefined")
-    {
-        if(!taxLatNameMapCache.has(lat_name)) return;
+    if(typeof main_inat_card === "undefined") main_inat_card = lowest_rank_card;        
 
-        const inat_cards = taxLatNameMapCache.get(lat_name);
+    return main_inat_card.id;
+}
 
-        let lowest_rank_card = inat_cards[0];
+function getTaxDetailsFromId(tax_id, fill_ancestor_details, taxIdMapCache)
+{
+    if(typeof tax_id == 'string') tax_id = Number(tax_id);
 
-        for(let j=0; j<inat_cards.length; j++)
-        {
-            if(inat_cards[j].rank_level < lowest_rank_card.rank_level)
-            {
-                lowest_rank_card = inat_cards[j];
-            }
-
-            if(inat_cards[j].rank_level <= 10)
-            {
-                main_inat_card = inat_cards[j];
+    if(!taxIdMapCache.has(tax_id)) return;
     
-                break;
-            }
-        }
+    const main_inat_card = taxIdMapCache.get(tax_id);
 
-        if(typeof main_inat_card === "undefined") main_inat_card = lowest_rank_card;
-    }
+    /* ranks are: 70 (kingdom), 60 (phylum), 50 (class), 40 (order), 30 (family), 20 (genus), 10 (species), 5 (subspecies) */
 
-    if(typeof main_inat_card === "undefined") return;
-
-/**
- * ranks are: 70 (kingdom), 60 (phylum), 50 (class), 40 (order), 30 (family), 20 (genus), 10 (species), 5 (subspecies)
- */
-
-    let en_name ='';
-    let ru_name ='';
+    let en_name = '';
+    let ru_name = '';
 
     if(main_inat_card.locale == 'en' && main_inat_card.preferred_common_name)
     {
@@ -166,23 +123,145 @@ function fillMainTaxDetailsEx(lat_name, known_tax_id, taxDetail, taxLatNameMapCa
         ru_name = main_inat_card.preferred_common_name;
     }
 
-    taxDetail[4].innerHTML = (main_inat_card.rank_level <= 10) ? main_inat_card.name : '';
-    taxDetail[5].innerHTML = en_name;
-    taxDetail[6].innerHTML = ru_name;
-    taxDetail[7].innerHTML = '<a href="https://www.inaturalist.org/taxa/' + main_inat_card.id + '">' + main_inat_card.id + '</a>';
-    taxDetail[8].innerHTML = main_inat_card.observations_count;
-    
-    if(typeof taxDetail[9] !== "undefined") taxDetail[9].innerHTML = main_inat_card.rank + ' (' + main_inat_card.rank_level + ')';
+    const tax_details = {
+        id: tax_id,
+        rank: main_inat_card.rank,
+        rank_level: main_inat_card.rank_level,
+        lat_name: main_inat_card.name,
+        en_name: en_name,
+        ru_name: ru_name,
+        inat_tax_url: 'https://www.inaturalist.org/taxa/' + main_inat_card.id,
+        observations_count: main_inat_card.observations_count,
+        ancestor_details:
+        {
+            kingdom: { lat_name: null, id: null }, 
+            phylum: { lat_name: null, id: null }, 
+            class: { lat_name: null, id: null }, 
+            order: { lat_name: null, id: null }, 
+            family: { lat_name: null, id: null }, 
+            genus: { lat_name: null, id: null }, 
+            species: { lat_name: null, id: null }, 
+            subspecies: { lat_name: null, id: null }, 
+        },
+        all_ancestors_found: false,
+    };
 
-    return main_inat_card;
+    if(!fill_ancestor_details) return tax_details;
+
+    const all_ids = [...main_inat_card.ancestor_ids, tax_id];
+
+    let everything_found = true;
+    
+    all_ids.ancestor_ids.forEach((ancestor_id) =>
+    {
+        if(taxIdMapCache.has(ancestor_id))
+        {
+            const ancestor_card = taxIdMapCache.get(ancestor_id);
+
+            if(ancestor_card.rank_level == 70) tax_details.ancestor_details.kingdom = { lat_name: ancestor_card.name, id: ancestor_card.id };
+            if(ancestor_card.rank_level == 50) tax_details.ancestor_details.phylum = { lat_name: ancestor_card.name, id: ancestor_card.id };
+            if(ancestor_card.rank_level == 40) tax_details.ancestor_details.class = { lat_name: ancestor_card.name, id: ancestor_card.id };
+            if(ancestor_card.rank_level == 30) tax_details.ancestor_details.order = { lat_name: ancestor_card.name, id: ancestor_card.id };
+            if(ancestor_card.rank_level == 20) tax_details.ancestor_details.family = { lat_name: ancestor_card.name, id: ancestor_card.id };
+            if(ancestor_card.rank_level == 10) tax_details.ancestor_details.species = { lat_name: ancestor_card.name, id: ancestor_card.id };
+            if(ancestor_card.rank_level == 5)  tax_details.ancestor_details.subspecies = { lat_name: ancestor_card.name, id: ancestor_card.id };
+        }
+        else
+        {
+            everything_found = false;
+        }
+    } );
+
+    tax_details.all_ancestors_found = everything_found;
+
+    return tax_details;
 }
 
+function fillTaxSpans(tax_details, taxSpans)
+{
+    if(typeof tax_details === "undefined") return;
+
+    function ifNotNull(value) { return (typeof value !== "undefined" && value !== null) ? value : ''; }
+
+    taxSpans[0].innerHTML = ifNotNull(tax_details.ancestor_details.kingdom.lat_name);
+    taxSpans[1].innerHTML = ifNotNull(tax_details.ancestor_details.class.lat_name);
+    taxSpans[2].innerHTML = ifNotNull(tax_details.ancestor_details.order.lat_name);
+    taxSpans[3].innerHTML = ifNotNull(tax_details.ancestor_details.family.lat_name);
+
+    // that is species or lower latin name
+    taxSpans[4].innerHTML = (tax_details.rank_level <= 10) ? tax_details.lat_name : '';
+    taxSpans[5].innerHTML = tax_details.en_name;
+    taxSpans[6].innerHTML = tax_details.ru_name;
+    taxSpans[7].innerHTML = `<a href="${tax_details.inat_tax_url}">${tax_details.id}</a>`;
+    taxSpans[8].innerHTML = tax_details.observations_count;
+    
+    if(typeof taxSpans[9] !== "undefined") taxSpans[9].innerHTML = tax_details.rank + ' (' + tax_details.rank_level + ')';
+
+    return tax_details;
+}
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+
+function fillAncestorTaxDetails(main_inat_card, taxDetail, taxIdMapCache)
+{
+    let query_ids = '';
+
+    if(main_inat_card.rank == 'kingdom') taxDetail[0].innerHTML = main_inat_card.name;
+    if(main_inat_card.rank == 'class')   taxDetail[1].innerHTML = main_inat_card.name;
+    if(main_inat_card.rank == 'order')   taxDetail[2].innerHTML = main_inat_card.name;
+    if(main_inat_card.rank == 'family')  taxDetail[3].innerHTML = main_inat_card.name;
+
+    main_inat_card.ancestor_ids.forEach((ancestor_id) =>
+    {
+        if(taxIdMapCache.has(ancestor_id))
+        {
+            let ancestor_card = taxIdMapCache.get(ancestor_id);
+
+            if(ancestor_card.rank == 'kingdom') taxDetail[0].innerHTML = ancestor_card.name;
+            if(ancestor_card.rank == 'class')   taxDetail[1].innerHTML = ancestor_card.name;
+            if(ancestor_card.rank == 'order')   taxDetail[2].innerHTML = ancestor_card.name;
+            if(ancestor_card.rank == 'family')  taxDetail[3].innerHTML = ancestor_card.name;
+        }
+    } );
+
+    let everything_found =
+        (taxDetail[0].innerHTML.length > 0 || main_inat_card.rank_level >= 70) &&
+        (taxDetail[1].innerHTML.length > 0 || main_inat_card.rank_level >= 50) &&
+        (taxDetail[2].innerHTML.length > 0 || main_inat_card.rank_level >= 40) &&
+        (taxDetail[3].innerHTML.length > 0 || main_inat_card.rank_level >= 30) &&
+        true;
+
+    return everything_found;
+}
 
 function fillMainTaxDetails(lat_name, taxDetail, taxLatNameMapCache, taxIdMapCache)
 {
-    let undefined;
-    return fillMainTaxDetailsEx(lat_name, undefined, taxDetail, taxLatNameMapCache, taxIdMapCache);
+    const tax_id = getTaxIdFromName(lat_name, taxLatNameMapCache);
+    if(typeof tax_id === "undefined") return;
+
+    const tax_details = getTaxDetailsFromId(tax_id, false, taxIdMapCache);
+    if(typeof tax_details === "undefined") return;
+
+    fillTaxSpans(tax_details, taxSpans);
+
+    return tax_details.inat_card;
 }
+
+function fillMainTaxDetailsEx(lat_name, tax_id, taxDetail, taxLatNameMapCache, taxIdMapCache)
+{
+    const tax_details = getTaxDetailsFromId(tax_id, false, taxIdMapCache);
+    if(typeof tax_details === "undefined") return;
+
+    fillTaxSpans(tax_details, taxDetail);
+
+    return tax_details.inat_card;
+}
+
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////
 
 function taxIdMap2taxLatNameMap(taxIdMapCache)
 {

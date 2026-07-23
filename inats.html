@@ -41,7 +41,16 @@
      <td>
       Project name:
       <input type="text" name="projectName" id="projectName">
-     </td>
+      <br />
+      Taxonomy level:
+      <select name="taxonomyLevel" id="taxonomyLevel">
+         <option value="kingdom">kingdom</option>
+         <option value="class">class</option>
+         <option value="order">order</option>
+         <option value="family" selected>family</option>
+         <option value="genus">genus</option>
+      </select>
+       </td>
      <td align="center">
       Filter:
       <select name="months" id="monthsSelect">
@@ -145,6 +154,7 @@ const monthsFilter = document.getElementById("monthsSelect");
 const showTimeSelect = document.getElementById("showTime");
 const yearInput = document.getElementById("year");
 const projectNameInput = document.getElementById("projectName");
+const taxonomyLevelSelect = document.getElementById("taxonomyLevel");
 
 myForm.addEventListener("submit", function (e) {
    e.preventDefault();
@@ -167,7 +177,7 @@ myForm.addEventListener("submit", function (e) {
       {
          const yearSummaryObservations = CSV2Observations(string, false);
          const yearSummarySpeciesMap = Observations2SpeciesMap(yearSummaryObservations);
-         generateYearSummaryReport( yearSummaryObservations, yearSummarySpeciesMap, yearInput.value, projectNameInput.value );
+         generateYearSummaryReport( yearSummaryObservations, yearSummarySpeciesMap, yearInput.value, projectNameInput.value, taxonomyLevelSelect.value );
       }
       else if( button_name == "compare" )
       {
