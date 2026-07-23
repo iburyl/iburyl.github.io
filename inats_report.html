@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>iNaturalist Date Range Report</title>
+    <style>
+        :root { color-scheme: light dark; }
+        * { box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            margin: 0; padding: 0 1.5rem 3rem; line-height: 1.5;
+        }
+        header {
+            padding: 1.5rem 0; border-bottom: 1px solid #8883; margin-bottom: 1.5rem;
+        }
+        header h1 { margin: 0; font-size: 1.4rem; }
+        a { color: #2563eb; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .muted { color: #6b7280; font-size: 0.9rem; }
+
+        .report-form {
+            display: flex; flex-wrap: wrap; gap: 0.75rem 1rem;
+            align-items: flex-end; max-width: 960px; margin-bottom: 0.75rem;
+        }
+        .field { display: flex; flex-direction: column; gap: 0.25rem; }
+        .field.grow { flex: 1 1 320px; min-width: 240px; }
+        .field label {
+            font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: #6b7280;
+        }
+        .field input, .field select {
+            font: inherit; padding: 0.5rem 0.7rem; border: 1px solid #8884;
+            border-radius: 6px; background: transparent; color: inherit;
+        }
+        .report-form button {
+            font: inherit; padding: 0.5rem 1.2rem; border: 1px solid #2563eb;
+            border-radius: 6px; background: #2563eb; color: #fff; cursor: pointer;
+        }
+        .report-form button:disabled { opacity: 0.6; cursor: default; }
+        #status { margin: 0.25rem 0 0; min-height: 1.2em; }
+
+        #report { margin-top: 1.5rem; }
+        #report h2 {
+            font-size: 1.15rem; margin: 1.75rem 0 0.6rem; padding-bottom: 0.3rem;
+            border-bottom: 1px solid #8883;
+        }
+        #report h2 .copy-link { color: #6b7280; font-weight: 400; font-size: 0.8rem; cursor: pointer; }
+        #report h2 .copy-link:hover { color: #2563eb; }
+        #report h3 {
+            font-size: 0.95rem; margin: 1.1rem 0 0.4rem; color: #6b7280;
+            text-transform: uppercase; letter-spacing: 0.03em;
+        }
+        table { border-collapse: collapse; margin: 0.25rem 0 0.75rem; font-size: 0.9rem; max-width: 100%; }
+        th {
+            font-weight: 600; color: #6b7280; border-bottom: 2px solid #8884;
+            white-space: nowrap; text-align: left; padding: 0.35rem 0.7rem;
+        }
+        td { border-bottom: 1px solid #8882; padding: 0.35rem 0.7rem; vertical-align: middle; text-align: left; }
+        tbody tr:hover td { background: #8881; }
+        img { border-radius: 4px; display: block; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>iNaturalist Date Range Report</h1>
+    </header>
+
+    <form id="report-form" class="report-form">
+        <div class="field grow">
+            <label for="project">Project (link or name)</label>
+            <input type="text" id="project" value="moths-of-oregon"
+                   placeholder="https://www.inaturalist.org/projects/moths-of-oregon  or  moths-of-oregon">
+        </div>
+        <div class="field">
+            <label for="d1">Range start</label>
+            <input type="date" id="d1">
+        </div>
+        <div class="field">
+            <label for="d2">Range end</label>
+            <input type="date" id="d2">
+        </div>
+        <div class="field">
+            <label for="level">Taxonomy level</label>
+            <select id="level">
+                <option value="kingdom">kingdom</option>
+                <option value="class">class</option>
+                <option value="order">order</option>
+                <option value="family" selected>family</option>
+                <option value="genus">genus</option>
+            </select>
+        </div>
+        <button type="submit" id="generate">Generate report</button>
+    </form>
+    <p id="status" class="muted"></p>
+
+    <div id="report"></div>
+
+    <script>
+        var JS_VERSION = Date.now();
+        document.write('<script src="js/report_api.js?v=' + JS_VERSION + '"><\/script>');
+        document.write('<script src="js/report_taxonomy.js?v=' + JS_VERSION + '"><\/script>');
+        document.write('<script src="js/report_render.js?v=' + JS_VERSION + '"><\/script>');
+        document.write('<script src="js/report_main.js?v=' + JS_VERSION + '"><\/script>');
+    </script>
+
+    <script>
+        (function () {
+            const form = document.getElementById('report-form');
+            const projectInput = document.getElementById('project');
+            const d1Input = document.getElementById('d1');
+            const d2Input = document.getElementById('d2');
+            const levelSelect = document.getElementById('level');
+            const generateBtn = document.getElementById('generate');
+            const statusEl = document.getElementById('status');
+            const target = document.getElementById('report');
+
+            const now = new Date();
+            d1Input.value = now.getFullYear() + '-01-01';
+            d2Input.value = IR.formatDate(now);
+
+            function setStatus(text, isError) {
+                statusEl.textContent = text;
+                statusEl.style.color = isError ? '#ef4444' : '';
+            }
+
+            form.addEventListener('submit', async function (e) {
+                e.preventDefault();
+
+                const slug = IR.parseProjectSlug(projectInput.value);
+                const d1 = d1Input.value;
+                const d2 = d2Input.value;
+
+                if (!slug) { setStatus('Enter a project link or name.', true); return; }
+                if (!d1 || !d2) { setStatus('Choose a start and end date.', true); return; }
+                if (d1 > d2) { setStatus('Range start must be on or before range end.', true); return; }
+
+                generateBtn.disabled = true;
+                target.innerHTML = '';
+                try {
+                    const count = await IR.generateProjectRangeReport({
+                        slug, d1, d2, level: levelSelect.value, statusFn: setStatus, target,
+                    });
+                    setStatus(count + ' observations analysed (' + d1 + ' \u2192 ' + d2 + ').');
+                } catch (err) {
+                    console.error(err);
+                    setStatus('Failed: ' + (err && err.message ? err.message : err), true);
+                } finally {
+                    generateBtn.disabled = false;
+                }
+            });
+        })();
+    </script>
+</body>
+</html>
