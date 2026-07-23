@@ -53,7 +53,13 @@
         .obs-square img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
 
         /* Interactive observation viewer (zoom / pan / rotate). */
-        #obs-img { user-select: none; cursor: grab; transition: transform 0.05s linear; }
+        /* The base display size is set explicitly in JS and frozen on load, so a
+           shrinking window clips (via .obs-square overflow) instead of rescaling
+           the image. Hence no max-width/height clamp here. */
+        #obs-img {
+            user-select: none; cursor: grab; transition: transform 0.05s linear;
+            max-width: none; max-height: none; object-fit: fill;
+        }
         #obs-img.dragging { cursor: grabbing; transition: none; }
         .obs-toolbar {
             position: absolute; left: 50%; transform: translateX(-50%); bottom: 8px; z-index: 2;
@@ -755,15 +761,32 @@
                 var measureLine = null;     // {x0, y0, x1, y1} in source image pixels
                 var measureLen = 0;         // measured line length in source pixels
                 var crossImg = null, crossUrl = null;
+                // Base "contain" scale, frozen at image load. Kept constant across
+                // window resizes so the visible image scale never changes; a smaller
+                // container just clips more of the image (via overflow: hidden).
+                var baseScale = 0;
 
                 var COLORS = ["#ff3b30", "#ff9500"];
 
                 // --- geometry (source-pixel <-> square-relative screen) ----------
-                function fit() {
+                // Freeze the base display scale for the current image + container,
+                // and pin the image element to that pixel size so later resizes clip
+                // instead of rescaling.
+                function freezeFit() {
+                    var nw = obsImg.naturalWidth, nh = obsImg.naturalHeight;
                     var r = obsSquare.getBoundingClientRect();
+                    if (!nw || !nh || !r.width || !r.height) { baseScale = 0; return; }
+                    baseScale = Math.min(r.width / nw, r.height / nh);
+                    obsImg.style.width = (nw * baseScale) + "px";
+                    obsImg.style.height = (nh * baseScale) + "px";
+                }
+                function fit() {
                     var nw = obsImg.naturalWidth, nh = obsImg.naturalHeight;
                     if (!nw || !nh) return null;
-                    var s = Math.min(r.width / nw, r.height / nh);
+                    if (!baseScale) freezeFit();
+                    if (!baseScale) return null;
+                    var r = obsSquare.getBoundingClientRect();
+                    var s = baseScale;
                     return { r: r, s: s, nw: nw, nh: nh, dw: nw * s, dh: nh * s };
                 }
                 function sourceToScreen(ix, iy, f) {
@@ -955,6 +978,25 @@
                     });
                 }
                 rulerRedraw = function () { if (srcRect || measureLine) drawResult(); };
+
+                // Re-freeze the base scale to fit the container each time a new image
+                // finishes loading, then (re)draw any existing overlay.
+                obsImg.addEventListener("load", function () {
+                    freezeFit();
+                    sizeOverlay();
+                    drawResult();
+                });
+                // On container resize keep the frozen scale (image size stays put and
+                // the square clips); only resize the overlay bitmap and redraw so the
+                // measurement/thread overlay keeps matching the image pixels.
+                if (window.ResizeObserver) {
+                    var ro = new ResizeObserver(function () {
+                        if (obsSquare.classList.contains("empty")) return;
+                        sizeOverlay();
+                        drawResult();
+                    });
+                    ro.observe(obsSquare);
+                }
 
                 function renderResults() {
                     if (!families.length) { resultsEl.innerHTML = ""; return; }
