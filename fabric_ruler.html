@@ -907,17 +907,25 @@
                     resultsEl.innerHTML = html;
                 }
 
+                // Route the analysis image through a CORS-enabled image proxy so the
+                // canvas isn't tainted on a static host. Many iNaturalist photo
+                // hosts (e.g. static.inaturalist.org) don't send CORS headers, which
+                // would otherwise block getImageData. The *displayed* image still
+                // loads directly; only this analysis copy is proxied.
+                function analysisSrc(url) {
+                    var stripped = String(url).replace(/^https?:\/\//, "");
+                    return "https://images.weserv.nl/?url=" +
+                        encodeURIComponent("ssl:" + stripped);
+                }
+
                 // --- selection / measurement interaction -------------------------
                 function beginSelect() {
                     if (obsSquare.classList.contains("empty")) return;
-                    // Load a CORS-enabled copy so the analysis canvas isn't tainted.
-                    // (Works for hosts that send CORS headers, e.g. the iNaturalist
-                    // open-data bucket.)
                     var url = photoItems[currentIndex] && photoItems[currentIndex].main;
                     if (url && url !== crossUrl) {
                         crossImg = new Image();
                         crossImg.crossOrigin = "anonymous";
-                        crossImg.src = url;
+                        crossImg.src = analysisSrc(url);
                         crossUrl = url;
                     }
                     captureMode = "rect";
