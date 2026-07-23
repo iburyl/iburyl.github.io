@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Fabric Ruler</title>
+    <style>
+        :root { color-scheme: light dark; }
+        * { box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            margin: 0; padding: 0 1.5rem 3rem; line-height: 1.5;
+        }
+        header {
+            padding: 1.5rem 0; border-bottom: 1px solid #8883; margin-bottom: 1.5rem;
+        }
+        header h1 { margin: 0; font-size: 1.4rem; }
+        a { color: #2563eb; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .muted { color: #6b7280; font-size: 0.9rem; }
+
+        .obs-input { display: flex; gap: 0.5rem; margin-bottom: 0.75rem; max-width: 720px; }
+        .obs-input input {
+            flex: 1; font: inherit; padding: 0.5rem 0.7rem;
+            border: 1px solid #8884; border-radius: 6px; background: transparent; color: inherit;
+        }
+        .obs-input button {
+            font: inherit; padding: 0.5rem 1rem; border: 1px solid #2563eb;
+            border-radius: 6px; background: #2563eb; color: #fff; cursor: pointer;
+        }
+        .obs-input button:disabled { opacity: 0.6; cursor: default; }
+        #obs-status { margin: 0 0 0.75rem; min-height: 1.2em; }
+
+        .obs-layout { display: flex; gap: 1.25rem; align-items: flex-start; flex-wrap: wrap; }
+        .obs-main { flex: 1 1 480px; min-width: 320px; display: flex; gap: 1rem; }
+        .obs-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        .obs-col h4 {
+            font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em;
+            color: #6b7280; margin: 0 0 0.5rem; min-height: 1.1em;
+        }
+        .obs-square {
+            position: relative; width: 100%; aspect-ratio: 1 / 1; max-height: 60vh;
+            border: 1px solid #8883; border-radius: 8px; background: #8881;
+            display: flex; align-items: center; justify-content: center;
+            overflow: hidden; touch-action: none;
+        }
+        .obs-square img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+
+        /* Interactive observation viewer (zoom / pan / rotate). */
+        #obs-img { user-select: none; cursor: grab; transition: transform 0.05s linear; }
+        #obs-img.dragging { cursor: grabbing; transition: none; }
+        .obs-toolbar {
+            position: absolute; left: 50%; transform: translateX(-50%); bottom: 8px; z-index: 2;
+            display: flex; align-items: center; gap: 6px; max-width: calc(100% - 16px);
+            background: rgba(0,0,0,0.5); padding: 4px 8px; border-radius: 6px;
+        }
+        .tb-buttons { display: flex; gap: 4px; }
+        .obs-toolbar button {
+            width: 28px; height: 28px; border: 1px solid #8886; border-radius: 4px;
+            background: rgba(0,0,0,0.4); color: #fff; cursor: pointer;
+            font-size: 15px; line-height: 1; padding: 0;
+        }
+        .obs-toolbar button:hover { background: rgba(0,0,0,0.8); }
+        .tb-rotate { display: flex; align-items: center; gap: 8px; width: 240px; }
+        .tb-rotate[hidden] { display: none; }
+        .tb-rotate input[type=range] { flex: 1; min-width: 0; accent-color: #2563eb; }
+        .tb-rotate .rot-val { color: #fff; font-size: 12px; min-width: 42px; text-align: right; }
+        #obs-overlay {
+            position: absolute; inset: 0; z-index: 1; pointer-events: none;
+            width: 100%; height: 100%;
+        }
+        #obs-overlay.selecting { pointer-events: auto; cursor: crosshair; }
+        .obs-empty { display: none; margin: 0; }
+        .obs-square.empty .obs-toolbar,
+        .obs-square.empty #obs-overlay,
+        .obs-square.empty #obs-img { display: none; }
+        .obs-square.empty .obs-empty { display: block; }
+
+        .ruler-section { margin-top: 1.25rem; border-top: 1px solid #8883; padding-top: 0.75rem; }
+        .ruler-section > summary {
+            cursor: pointer; font-size: 0.95rem; font-weight: 600; list-style: revert;
+        }
+        .ruler-body { margin-top: 0.6rem; }
+        .ruler-body button {
+            font: inherit; padding: 0.35rem 0.9rem; border: 1px solid #2563eb;
+            border-radius: 6px; background: #2563eb; color: #fff; cursor: pointer;
+        }
+        .ruler-body button.active { background: #ef4444; border-color: #ef4444; }
+        .ruler-body button + button { margin-left: 0.4rem; }
+        #ruler-status, #ruler-measure-status { margin: 0.5rem 0 0; }
+        .ruler-swatch { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 2px; margin-right: 0.35rem; vertical-align: middle; }
+        .obs-strip { display: flex; gap: 0.4rem; overflow-x: auto; padding: 0.5rem 0; min-height: 0.5rem; }
+        .obs-strip img {
+            height: 76px; width: 76px; object-fit: cover; border-radius: 4px;
+            border: 1px solid #8883; cursor: pointer; flex: 0 0 auto;
+        }
+        .obs-strip img.active { border-color: #2563eb; box-shadow: 0 0 0 2px #2563eb66; }
+
+        .side-panel { flex: 0 0 300px; max-width: 100%; font-size: 0.9rem; }
+        .side-panel h3 {
+            font-size: 0.95rem; margin: 0 0 0.5rem;
+            border-bottom: 1px solid #8883; padding-bottom: 0.35rem;
+        }
+        .meta-list { list-style: none; padding: 0; margin: 0; }
+        .meta-list li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.15rem 0; }
+        .meta-list li span:first-child { color: #6b7280; }
+        .meta-list li .val { text-align: right; word-break: break-word; }
+        .license-bad { color: #ef4444; font-weight: 600; }
+        .research-ok { color: #16a34a; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Fabric Ruler</h1>
+    </header>
+
+    <!-- FFT math: window.MothFFT -->
+    <script>
+        (function () {
+            // In-place iterative radix-2 FFT of complex arrays re/im (length = 2^k).
+            function fft(re, im) {
+                var n = re.length;
+                for (var i = 1, j = 0; i < n; i++) {
+                    var bit = n >> 1;
+                    for (; j & bit; bit >>= 1) j ^= bit;
+                    j ^= bit;
+                    if (i < j) {
+                        var tr = re[i]; re[i] = re[j]; re[j] = tr;
+                        var ti = im[i]; im[i] = im[j]; im[j] = ti;
+                    }
+                }
+                for (var len = 2; len <= n; len <<= 1) {
+                    var ang = -2 * Math.PI / len;
+                    var wr = Math.cos(ang), wi = Math.sin(ang);
+                    for (var s0 = 0; s0 < n; s0 += len) {
+                        var cwr = 1, cwi = 0;
+                        for (var k = 0; k < len / 2; k++) {
+                            var a = s0 + k, b = s0 + k + len / 2;
+                            var vr = re[b] * cwr - im[b] * cwi;
+                            var vi = re[b] * cwi + im[b] * cwr;
+                            re[b] = re[a] - vr; im[b] = im[a] - vi;
+                            re[a] += vr; im[a] += vi;
+                            var ncwr = cwr * wr - cwi * wi;
+                            cwi = cwr * wi + cwi * wr; cwr = ncwr;
+                        }
+                    }
+                }
+            }
+
+            // Separable 2D FFT over an NxN row-major complex image (re/im, length N*N).
+            function fft2d(re, im, n) {
+                var rr = new Float64Array(n), ri = new Float64Array(n);
+                var y, x;
+                for (y = 0; y < n; y++) {
+                    for (x = 0; x < n; x++) { rr[x] = re[y * n + x]; ri[x] = im[y * n + x]; }
+                    fft(rr, ri);
+                    for (x = 0; x < n; x++) { re[y * n + x] = rr[x]; im[y * n + x] = ri[x]; }
+                }
+                for (x = 0; x < n; x++) {
+                    for (y = 0; y < n; y++) { rr[y] = re[y * n + x]; ri[y] = im[y * n + x]; }
+                    fft(rr, ri);
+                    for (y = 0; y < n; y++) { re[y * n + x] = rr[y]; im[y * n + x] = ri[y]; }
+                }
+            }
+
+            function pow2Floor(v) {
+                var p = 1;
+                while (p * 2 <= v) p *= 2;
+                return p;
+            }
+
+            window.MothFFT = { fft: fft, fft2d: fft2d, pow2Floor: pow2Floor };
+        })();
+    </script>
+
+    <!-- FFT-result interpretation: window.MothFabricAnalysis -->
+    <script>
+        (function () {
+            function analysePeaks(re, im, n, lum) {
+                // Power spectrum with a mild high-pass (drop DC + lowest bins) so the
+                // autocorrelation's central lobe stays narrow. Zeroing rho < hp also
+                // caps the largest detectable spacing at ~N/hp, matching rmax below.
+                var hp = 3;
+                var pr = new Float64Array(n * n);
+                var pi = new Float64Array(n * n);
+                for (var v = 0; v < n; v++) {
+                    var kv = v <= n / 2 ? v : v - n;
+                    for (var u = 0; u < n; u++) {
+                        var ku = u <= n / 2 ? u : u - n;
+                        var idx = v * n + u;
+                        if (ku * ku + kv * kv < hp * hp) continue; // leave 0
+                        pr[idx] = re[idx] * re[idx] + im[idx] * im[idx];
+                    }
+                }
+
+                // autocorr = IDFT(power). The power spectrum is real and even (the
+                // patch was real), and DFT(even-real) = N * IDFT(even-real), so a
+                // forward 2D FFT gives the autocorrelation up to a positive scale;
+                // only peak positions matter here.
+                window.MothFFT.fft2d(pr, pi, n);
+
+                // Wrapped lookup: lag (lx, ly) lives at (ly mod n, lx mod n).
+                function at(lx, ly) {
+                    var xx = ((lx % n) + n) % n;
+                    var yy = ((ly % n) + n) % n;
+                    return pr[yy * n + xx];
+                }
+
+                var rmin = 4, rmax = Math.floor(n / 3);
+                var cands = [];
+                for (var ly = -rmax; ly <= rmax; ly++) {
+                    for (var lx = -rmax; lx <= rmax; lx++) {
+                        // Half-plane only (autocorr is centrosymmetric).
+                        if (ly < 0 || (ly === 0 && lx <= 0)) continue;
+                        var r = Math.sqrt(lx * lx + ly * ly);
+                        if (r < rmin || r > rmax) continue;
+                        var val = at(lx, ly);
+                        if (val <= 0) continue;
+                        var isMax = true;
+                        for (var dy = -1; dy <= 1 && isMax; dy++) {
+                            for (var dx = -1; dx <= 1; dx++) {
+                                if ((dx || dy) && at(lx + dx, ly + dy) > val) {
+                                    isMax = false; break;
+                                }
+                            }
+                        }
+                        if (isMax) cands.push({ lx: lx, ly: ly, r: r, val: val });
+                    }
+                }
+                if (!cands.length) return { error: "No periodic pattern found." };
+
+                var maxVal = 0;
+                cands.forEach(function (c) { if (c.val > maxVal) maxVal = c.val; });
+                var thresh = 0.3 * maxVal;
+                var sig = cands.filter(function (c) { return c.val >= thresh; });
+                // Prefer the nearest strong peak = the fundamental thread pitch.
+                sig.sort(function (a, b) { return a.r - b.r; });
+
+                // Sub-pixel lag via a background-subtracted centroid over a small
+                // window (uses the whole neighbourhood, so the direction is better
+                // conditioned than a separable parabola).
+                function centroid(cx, cy) {
+                    var R = 2, lo = Infinity, y, x;
+                    for (y = -R; y <= R; y++)
+                        for (x = -R; x <= R; x++)
+                            lo = Math.min(lo, at(cx + x, cy + y));
+                    var sw = 0, sx = 0, sy = 0;
+                    for (y = -R; y <= R; y++) {
+                        for (x = -R; x <= R; x++) {
+                            var w = at(cx + x, cy + y) - lo;
+                            if (w <= 0) continue;
+                            sw += w; sx += w * x; sy += w * y;
+                        }
+                    }
+                    var ox = sw ? sx / sw : 0, oy = sw ? sy / sw : 0;
+                    if (Math.abs(ox) > R) ox = 0;
+                    if (Math.abs(oy) > R) oy = 0;
+                    return { lx: cx + ox, ly: cy + oy };
+                }
+
+                // Fit a family from a fundamental lag: gather its collinear harmonics
+                // (k * L0), then take the principal direction of their scatter matrix
+                // and a least-squares pitch. Farther harmonics sharpen the angle.
+                function makeFamily(c) {
+                    var f0 = centroid(c.lx, c.ly);
+                    var pts = [{ x: f0.lx, y: f0.ly, k: 1 }];
+                    var r0 = Math.sqrt(f0.lx * f0.lx + f0.ly * f0.ly);
+                    var harmThresh = 0.12 * maxVal, win = 2;
+                    for (var k = 2; k * r0 <= rmax + win; k++) {
+                        var px = Math.round(k * f0.lx), py = Math.round(k * f0.ly);
+                        var best = null, bv = harmThresh;
+                        for (var wy = -win; wy <= win; wy++) {
+                            for (var wx = -win; wx <= win; wx++) {
+                                var vv = at(px + wx, py + wy);
+                                if (vv > bv) { bv = vv; best = { x: px + wx, y: py + wy }; }
+                            }
+                        }
+                        if (!best) break; // missing harmonic -> stop the chain
+                        var cc = centroid(best.x, best.y);
+                        pts.push({ x: cc.lx, y: cc.ly, k: k });
+                    }
+
+                    // Principal direction of the (collinear) lag points.
+                    var a = 0, b = 0, d = 0, i;
+                    for (i = 0; i < pts.length; i++) {
+                        a += pts[i].x * pts[i].x;
+                        b += pts[i].x * pts[i].y;
+                        d += pts[i].y * pts[i].y;
+                    }
+                    var lagAngle = 0.5 * Math.atan2(2 * b, a - d);
+                    // Align the direction with the fundamental lag.
+                    if (Math.cos(lagAngle - Math.atan2(f0.ly, f0.lx)) < 0) {
+                        lagAngle += Math.PI;
+                    }
+                    var dirx = Math.cos(lagAngle), diry = Math.sin(lagAngle);
+
+                    // Least-squares pitch: projection t_i = pitch * k_i.
+                    var num = 0, den = 0;
+                    for (i = 0; i < pts.length; i++) {
+                        var t = pts[i].x * dirx + pts[i].y * diry;
+                        num += pts[i].k * t; den += pts[i].k * pts[i].k;
+                    }
+                    var spacing = den ? num / den : r0;
+
+                    var lineAngle = lagAngle + Math.PI / 2;
+                    var deg = ((lineAngle * 180 / Math.PI) % 180 + 180) % 180;
+                    return {
+                        spacing: spacing, angleDeg: deg,
+                        lineAngle: lineAngle, freqAngle: lagAngle,
+                    };
+                }
+
+                // Windowed, mean-subtracted luminance for the angle refinement below.
+                var mean = 0, q;
+                for (q = 0; q < n * n; q++) mean += lum[q];
+                mean /= n * n;
+                var han = new Float64Array(n);
+                for (q = 0; q < n; q++) han[q] = 0.5 * (1 - Math.cos(2 * Math.PI * q / (n - 1)));
+                var vw = new Float64Array(n * n);
+                for (var yy = 0; yy < n; yy++)
+                    for (var xx = 0; xx < n; xx++)
+                        vw[yy * n + xx] = (lum[yy * n + xx] - mean) * han[yy] * han[xx];
+
+                // Angle refinement, independent of spacing: search around the
+                // harmonic estimate and pick the direction whose 1D projection is
+                // most strongly periodic at the (fixed) spacing. This is a single DFT
+                // bin |sum vw * exp(i 2*pi (x cos t + y sin t) / spacing)|, evaluated
+                // separably (O(n) trig per angle), within +/-12 degrees.
+                function refineAngle(lag, spacing) {
+                    if (!(spacing > 1)) return lag;
+                    var range = 12 * Math.PI / 180, step = 0.5 * Math.PI / 180;
+                    var cx = new Float64Array(n), sx = new Float64Array(n);
+                    var cy = new Float64Array(n), sy = new Float64Array(n);
+                    var best = lag, bestMag = -1;
+                    for (var th = lag - range; th <= lag + range + 1e-9; th += step) {
+                        var kx = 2 * Math.PI * Math.cos(th) / spacing;
+                        var ky = 2 * Math.PI * Math.sin(th) / spacing;
+                        var x, y;
+                        for (x = 0; x < n; x++) { cx[x] = Math.cos(kx * x); sx[x] = Math.sin(kx * x); }
+                        for (y = 0; y < n; y++) { cy[y] = Math.cos(ky * y); sy[y] = Math.sin(ky * y); }
+                        var sr = 0, si = 0;
+                        for (y = 0; y < n; y++) {
+                            var rr = 0, ri = 0, base = y * n;
+                            for (x = 0; x < n; x++) {
+                                var vv = vw[base + x];
+                                rr += vv * cx[x]; ri += vv * sx[x];
+                            }
+                            sr += rr * cy[y] - ri * sy[y];
+                            si += rr * sy[y] + ri * cy[y];
+                        }
+                        var mag = sr * sr + si * si;
+                        if (mag > bestMag) { bestMag = mag; best = th; }
+                    }
+                    return best;
+                }
+
+                function finalize(fam) {
+                    var lag = refineAngle(fam.freqAngle, fam.spacing);
+                    var lineAngle = lag + Math.PI / 2;
+                    var deg = ((lineAngle * 180 / Math.PI) % 180 + 180) % 180;
+                    return {
+                        spacing: fam.spacing, angleDeg: deg,
+                        lineAngle: lineAngle, freqAngle: lag,
+                    };
+                }
+
+                // Each thread direction is fitted independently from its own collinear
+                // harmonics (spacing + coarse angle), then its angle is refined.
+                var out = [finalize(makeFamily(sig[0]))];
+                for (var j = 1; j < sig.length && out.length < 2; j++) {
+                    var fam = makeFamily(sig[j]);
+                    var diff = Math.abs(fam.angleDeg - out[0].angleDeg);
+                    diff = Math.min(diff, 180 - diff);
+                    if (diff > 25) { out.push(finalize(fam)); break; }
+                }
+                return { families: out, n: n };
+            }
+
+            window.MothFabricAnalysis = { analysePeaks: analysePeaks };
+        })();
+    </script>
+
+    <div id="obs-root">
+        <div class="obs-input">
+            <input type="text" id="obs-url" autofocus
+                   placeholder="https://www.inaturalist.org/observations/43">
+            <button type="button" id="obs-load">Load</button>
+        </div>
+        <p id="obs-status" class="muted"></p>
+
+        <div class="obs-layout">
+            <div class="obs-main">
+                <div class="obs-col">
+                    <h4>Observation photos</h4>
+                    <div class="obs-square empty" id="obs-square">
+                        <img id="obs-img" alt="" draggable="false">
+                        <canvas id="obs-overlay"></canvas>
+                        <div class="obs-toolbar">
+                            <div class="tb-buttons" id="tb-buttons">
+                                <button type="button" data-act="zoomout" title="Zoom out">&minus;</button>
+                                <button type="button" data-act="zoomin" title="Zoom in">+</button>
+                                <button type="button" data-act="rotate" title="Rotate">&#8635;</button>
+                                <button type="button" data-act="reset" title="Reset view">&#10021;</button>
+                            </div>
+                            <div class="tb-rotate" id="tb-rotate" hidden>
+                                <input type="range" id="obs-rot" min="-180" max="180" step="0.5" value="0"
+                                       title="Rotate (arbitrary)">
+                                <span class="rot-val" id="obs-rot-val">0&deg;</span>
+                            </div>
+                        </div>
+                        <p class="obs-empty muted">No photos.</p>
+                    </div>
+                    <div class="obs-strip" id="obs-strip"></div>
+                </div>
+            </div>
+            <aside class="side-panel">
+                <h3>Observation</h3>
+                <ul class="meta-list" id="obs-meta"></ul>
+
+                <details class="ruler-section" id="ruler-section" open>
+                    <summary>Ruler</summary>
+                    <div class="ruler-body">
+                        <button type="button" id="ruler-calibrate">Calibrate</button>
+                        <button type="button" id="ruler-measure" hidden>Measure</button>
+                        <p class="muted" id="ruler-status">
+                            Click Calibrate, then drag a rectangle over the fabric
+                            background to measure thread spacing and angle.
+                        </p>
+                        <ul class="meta-list" id="ruler-results"></ul>
+                        <p class="muted" id="ruler-measure-status"></p>
+                    </div>
+                </details>
+            </aside>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            var input = document.getElementById("obs-url");
+            var loadBtn = document.getElementById("obs-load");
+            var obsSquare = document.getElementById("obs-square");
+            var obsStrip = document.getElementById("obs-strip");
+            var metaEl = document.getElementById("obs-meta");
+            var statusEl = document.getElementById("obs-status");
+            var obsImg = document.getElementById("obs-img");
+            var rotSlider = document.getElementById("obs-rot");
+            var rotVal = document.getElementById("obs-rot-val");
+            var tbButtons = document.getElementById("tb-buttons");
+            var tbRotate = document.getElementById("tb-rotate");
+
+            function esc(value) {
+                var d = document.createElement("div");
+                d.textContent = value == null ? "" : String(value);
+                return d.innerHTML;
+            }
+            function parseId(text) {
+                if (!text) return null;
+                var m = String(text).match(/observations\/(\d+)/);
+                if (m) return m[1];
+                m = String(text).match(/^\s*(\d+)\s*$/);
+                return m ? m[1] : null;
+            }
+            function enlarge(url) {
+                return url ? url.replace("/square.", "/large.") : url;
+            }
+            function isCC(code) {
+                return !!code && code.toLowerCase().indexOf("cc") === 0;
+            }
+
+            // --- Interactive observation viewer: zoom / pan / rotate ---------------
+            var view = { scale: 1, tx: 0, ty: 0, rot: 0 };
+            // Per-photo view states for the current observation (index -> state);
+            // cleared whenever a new observation is loaded.
+            var photoItems = [];
+            var viewStates = [];
+            var currentIndex = -1;
+            // Assigned by the ruler module below.
+            var rulerRedraw = function () {};
+            var rulerClear = function () {};
+
+            function applyTransform() {
+                obsImg.style.transform =
+                    "translate(" + view.tx + "px," + view.ty + "px) " +
+                    "scale(" + view.scale + ") rotate(" + view.rot + "deg)";
+                rulerRedraw();
+            }
+            function setRotation(deg) {
+                view.rot = deg;
+                rotSlider.value = String(deg);
+                rotVal.textContent = Math.round(deg) + "\u00b0";
+                applyTransform();
+            }
+            function resetView() {
+                view.scale = 1; view.tx = 0; view.ty = 0;
+                setRotation(0);
+            }
+            function clampScale(s) { return Math.min(10, Math.max(1, s)); }
+            function zoomBy(factor) {
+                view.scale = clampScale(view.scale * factor);
+                if (view.scale === 1) { view.tx = 0; view.ty = 0; }
+                applyTransform();
+            }
+
+            obsSquare.addEventListener("wheel", function (e) {
+                if (obsSquare.classList.contains("empty")) return;
+                e.preventDefault();
+                var rect = obsSquare.getBoundingClientRect();
+                var px = e.clientX - rect.left - rect.width / 2;
+                var py = e.clientY - rect.top - rect.height / 2;
+                var factor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+                var ns = clampScale(view.scale * factor);
+                if (ns !== view.scale) {
+                    view.tx = px - (px - view.tx) * ns / view.scale;
+                    view.ty = py - (py - view.ty) * ns / view.scale;
+                    view.scale = ns;
+                    if (view.scale === 1) { view.tx = 0; view.ty = 0; }
+                    applyTransform();
+                }
+            }, { passive: false });
+
+            var dragging = false, lastX = 0, lastY = 0;
+            obsImg.addEventListener("pointerdown", function (e) {
+                dragging = true; lastX = e.clientX; lastY = e.clientY;
+                obsImg.classList.add("dragging");
+                try { obsImg.setPointerCapture(e.pointerId); } catch (_) {}
+            });
+            obsImg.addEventListener("pointermove", function (e) {
+                if (!dragging) return;
+                view.tx += e.clientX - lastX;
+                view.ty += e.clientY - lastY;
+                lastX = e.clientX; lastY = e.clientY;
+                applyTransform();
+            });
+            function endDrag(e) {
+                if (!dragging) return;
+                dragging = false;
+                obsImg.classList.remove("dragging");
+                try { obsImg.releasePointerCapture(e.pointerId); } catch (_) {}
+            }
+            obsImg.addEventListener("pointerup", endDrag);
+            obsImg.addEventListener("pointercancel", endDrag);
+
+            function collapseRotate() {
+                tbRotate.hidden = true;
+                tbButtons.hidden = false;
+            }
+            function expandRotate() {
+                tbButtons.hidden = true;
+                tbRotate.hidden = false;
+                rotSlider.focus();
+            }
+
+            tbButtons.addEventListener("click", function (e) {
+                var btn = e.target.closest("button");
+                if (!btn) return;
+                var act = btn.dataset.act;
+                if (act === "zoomin") zoomBy(1.25);
+                else if (act === "zoomout") zoomBy(1 / 1.25);
+                else if (act === "reset") resetView();
+                else if (act === "rotate") expandRotate();
+            });
+
+            rotSlider.addEventListener("input", function () {
+                setRotation(parseFloat(rotSlider.value) || 0);
+            });
+            rotSlider.addEventListener("blur", collapseRotate);
+
+            function saveCurrentView() {
+                if (currentIndex >= 0) {
+                    viewStates[currentIndex] = {
+                        scale: view.scale, tx: view.tx, ty: view.ty, rot: view.rot,
+                    };
+                }
+            }
+            function selectPhoto(i) {
+                if (i === currentIndex) return;
+                saveCurrentView();
+                currentIndex = i;
+                obsImg.src = photoItems[i].main;
+                var st = viewStates[i];
+                if (st) {
+                    view.scale = st.scale; view.tx = st.tx; view.ty = st.ty;
+                    setRotation(st.rot);
+                } else {
+                    view.scale = 1; view.tx = 0; view.ty = 0;
+                    setRotation(0);
+                }
+                Array.prototype.forEach.call(obsStrip.children, function (c, idx) {
+                    c.classList.toggle("active", idx === i);
+                });
+                rulerClear();
+            }
+
+            function renderObservation(items) {
+                obsStrip.innerHTML = "";
+                photoItems = items;
+                viewStates = [];
+                currentIndex = -1;
+                if (!items.length) {
+                    obsSquare.classList.add("empty");
+                    obsImg.removeAttribute("src");
+                    return;
+                }
+                obsSquare.classList.remove("empty");
+                items.forEach(function (it) {
+                    var t = document.createElement("img");
+                    t.src = it.thumb;
+                    t.loading = "lazy";
+                    var idx = obsStrip.children.length;
+                    t.addEventListener("click", function () { selectPhoto(idx); });
+                    obsStrip.appendChild(t);
+                });
+                selectPhoto(0);
+            }
+
+            function metaRow(label, valueHtml, cls) {
+                return "<li><span>" + esc(label) + "</span>" +
+                    "<span class='val" + (cls ? " " + cls : "") + "'>" + valueHtml + "</span></li>";
+            }
+
+            function renderMeta(obs) {
+                var taxon = obs.taxon || {};
+                var user = obs.user || {};
+                var quality = obs.quality_grade || "";
+                var isResearch = quality === "research";
+                var license = obs.license_code;
+
+                var html = "";
+                html += metaRow("observation",
+                    "<a href='https://www.inaturalist.org/observations/" + obs.id +
+                    "' target='_blank' rel='noopener'>" + obs.id + "</a>");
+                html += metaRow("taxon",
+                    esc(taxon.name || "\u2014") + (taxon.id ? " (" + taxon.id + ")" : ""));
+                html += metaRow("common name", esc(taxon.preferred_common_name || "\u2014"));
+                html += metaRow("rank", esc(taxon.rank || "\u2014"));
+                html += metaRow("quality",
+                    (isResearch ? "\u2714 " : "") + esc(quality || "\u2014"),
+                    isResearch ? "research-ok" : "");
+                html += metaRow("license",
+                    esc(license || "none"), isCC(license) ? "" : "license-bad");
+                html += metaRow("observed on", esc(obs.observed_on || "\u2014"));
+                html += metaRow("place", esc(obs.place_guess || "\u2014"));
+                html += metaRow("observer", esc(user.login || "\u2014"));
+                metaEl.innerHTML = html;
+            }
+
+            function load() {
+                var id = parseId(input.value);
+                if (!id) {
+                    statusEl.textContent = "Enter an iNaturalist observation URL or id.";
+                    return;
+                }
+                statusEl.textContent = "Loading\u2026";
+                renderObservation([]);
+                metaEl.innerHTML = "";
+                loadBtn.disabled = true;
+                fetch("https://api.inaturalist.org/v1/observations/" + id)
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        var obs = data && data.results && data.results[0];
+                        if (!obs) {
+                            statusEl.textContent = "Observation not found.";
+                            return;
+                        }
+                        statusEl.textContent = "";
+                        var items = (obs.photos || []).map(function (p) {
+                            return { main: enlarge(p.url), thumb: p.url };
+                        });
+                        renderObservation(items);
+                        renderMeta(obs);
+                    })
+                    .catch(function () {
+                        statusEl.textContent = "Failed to load from iNaturalist.";
+                    })
+                    .then(function () { loadBtn.disabled = false; });
+            }
+
+            // --- Ruler: FFT-based fabric thread measurement -----------------------
+            (function () {
+                var overlay = document.getElementById("obs-overlay");
+                var ctx = overlay.getContext("2d");
+                var calBtn = document.getElementById("ruler-calibrate");
+                var measureBtn = document.getElementById("ruler-measure");
+                var statusEl2 = document.getElementById("ruler-status");
+                var resultsEl = document.getElementById("ruler-results");
+                var measureStatus = document.getElementById("ruler-measure-status");
+
+                var captureMode = null;     // null | "rect" | "line"
+                var dragging = false;
+                var startPt = null, curPt = null;   // square-relative pixels
+                var srcRect = null;         // {x, y, w, h} in source image pixels
+                var families = [];          // [{spacing, angleDeg, lineAngle}]
+                var measureLine = null;     // {x0, y0, x1, y1} in source image pixels
+                var crossImg = null, crossUrl = null;
+
+                var COLORS = ["#ff3b30", "#ff9500"];
+
+                // --- geometry (source-pixel <-> square-relative screen) ----------
+                function fit() {
+                    var r = obsSquare.getBoundingClientRect();
+                    var nw = obsImg.naturalWidth, nh = obsImg.naturalHeight;
+                    if (!nw || !nh) return null;
+                    var s = Math.min(r.width / nw, r.height / nh);
+                    return { r: r, s: s, nw: nw, nh: nh, dw: nw * s, dh: nh * s };
+                }
+                function sourceToScreen(ix, iy, f) {
+                    var W = f.r.width, H = f.r.height, cx = W / 2, cy = H / 2;
+                    var offx = (W - f.dw) / 2, offy = (H - f.dh) / 2;
+                    var px = offx + ix * f.s, py = offy + iy * f.s;
+                    var dx = (px - cx) * view.scale, dy = (py - cy) * view.scale;
+                    var rad = view.rot * Math.PI / 180;
+                    var cos = Math.cos(rad), sin = Math.sin(rad);
+                    return {
+                        x: cx + dx * cos - dy * sin + view.tx,
+                        y: cy + dx * sin + dy * cos + view.ty,
+                    };
+                }
+                function screenToSource(qx, qy, f) {
+                    var W = f.r.width, H = f.r.height, cx = W / 2, cy = H / 2;
+                    var rx = qx - cx - view.tx, ry = qy - cy - view.ty;
+                    var rad = -view.rot * Math.PI / 180;
+                    var cos = Math.cos(rad), sin = Math.sin(rad);
+                    var ux = rx * cos - ry * sin, uy = rx * sin + ry * cos;
+                    var px = cx + ux / view.scale, py = cy + uy / view.scale;
+                    var offx = (W - f.dw) / 2, offy = (H - f.dh) / 2;
+                    return { x: (px - offx) / f.s, y: (py - offy) / f.s };
+                }
+                function localPoint(e) {
+                    var r = obsSquare.getBoundingClientRect();
+                    return { x: e.clientX - r.left, y: e.clientY - r.top };
+                }
+
+                // Extract the selected patch's windowed luminance, run the 2D FFT
+                // (MothFFT), and interpret the spectrum into thread families
+                // (MothFabricAnalysis). `cimg` must be CORS-enabled so the canvas
+                // isn't tainted.
+                function analyse(cimg, rect) {
+                    var n = MothFFT.pow2Floor(Math.min(rect.w, rect.h));
+                    n = Math.max(64, Math.min(512, n));
+                    var cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2;
+                    var sx = Math.round(cx - n / 2), sy = Math.round(cy - n / 2);
+                    sx = Math.max(0, Math.min(sx, cimg.naturalWidth - n));
+                    sy = Math.max(0, Math.min(sy, cimg.naturalHeight - n));
+                    if (sx < 0 || sy < 0) return null;
+
+                    var cv = document.createElement("canvas");
+                    cv.width = n; cv.height = n;
+                    var c2 = cv.getContext("2d");
+                    c2.drawImage(cimg, sx, sy, n, n, 0, 0, n, n);
+                    var data;
+                    try {
+                        data = c2.getImageData(0, 0, n, n).data;
+                    } catch (err) {
+                        return { error: "Image is cross-origin; cannot read pixels." };
+                    }
+
+                    var lum = new Float64Array(n * n), mean = 0, i;
+                    for (i = 0; i < n * n; i++) {
+                        lum[i] = 0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] +
+                                 0.114 * data[i * 4 + 2];
+                        mean += lum[i];
+                    }
+                    mean /= n * n;
+
+                    // Mean-subtract and apply a separable 2D Hann window.
+                    var re = new Float64Array(n * n), im = new Float64Array(n * n);
+                    var wy, wx;
+                    for (var yy = 0; yy < n; yy++) {
+                        wy = 0.5 * (1 - Math.cos(2 * Math.PI * yy / (n - 1)));
+                        for (var xx = 0; xx < n; xx++) {
+                            wx = 0.5 * (1 - Math.cos(2 * Math.PI * xx / (n - 1)));
+                            re[yy * n + xx] = (lum[yy * n + xx] - mean) * wx * wy;
+                        }
+                    }
+                    MothFFT.fft2d(re, im, n);
+                    return MothFabricAnalysis.analysePeaks(re, im, n, lum);
+                }
+
+                // --- drawing ------------------------------------------------------
+                function sizeOverlay() {
+                    var r = obsSquare.getBoundingClientRect();
+                    if (overlay.width !== Math.round(r.width) ||
+                        overlay.height !== Math.round(r.height)) {
+                        overlay.width = Math.round(r.width);
+                        overlay.height = Math.round(r.height);
+                    }
+                }
+                function clearCanvas() {
+                    ctx.clearRect(0, 0, overlay.width, overlay.height);
+                }
+                function drawLiveRect() {
+                    sizeOverlay();
+                    clearCanvas();
+                    if (!startPt || !curPt) return;
+                    var x = Math.min(startPt.x, curPt.x), y = Math.min(startPt.y, curPt.y);
+                    var w = Math.abs(curPt.x - startPt.x), h = Math.abs(curPt.y - startPt.y);
+                    ctx.strokeStyle = "#ffffff";
+                    ctx.lineWidth = 1.5;
+                    ctx.setLineDash([5, 4]);
+                    ctx.strokeRect(x, y, w, h);
+                    ctx.setLineDash([]);
+                }
+                function drawLiveLine() {
+                    sizeOverlay();
+                    clearCanvas();
+                    if (srcRect) drawResultOnly();
+                    if (!startPt || !curPt) return;
+                    ctx.strokeStyle = "#1e90ff";
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(startPt.x, startPt.y);
+                    ctx.lineTo(curPt.x, curPt.y);
+                    ctx.stroke();
+                }
+                function drawResult() {
+                    sizeOverlay();
+                    clearCanvas();
+                    drawResultOnly();
+                }
+                // Draws the current thread overlay + measure line without clearing,
+                // so it can be composited under a live drag.
+                function drawResultOnly() {
+                    if (!srcRect) { drawMeasureLine(); return; }
+                    var f = fit();
+                    if (!f) return;
+
+                    var c = [
+                        sourceToScreen(srcRect.x, srcRect.y, f),
+                        sourceToScreen(srcRect.x + srcRect.w, srcRect.y, f),
+                        sourceToScreen(srcRect.x + srcRect.w, srcRect.y + srcRect.h, f),
+                        sourceToScreen(srcRect.x, srcRect.y + srcRect.h, f),
+                    ];
+                    // rectangle outline
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.moveTo(c[0].x, c[0].y);
+                    ctx.lineTo(c[1].x, c[1].y);
+                    ctx.lineTo(c[2].x, c[2].y);
+                    ctx.lineTo(c[3].x, c[3].y);
+                    ctx.closePath();
+                    ctx.strokeStyle = "rgba(255,255,255,0.8)";
+                    ctx.lineWidth = 1.5;
+                    ctx.stroke();
+
+                    // clip to the rectangle, then draw each thread family
+                    ctx.clip();
+                    var center = sourceToScreen(srcRect.x + srcRect.w / 2,
+                                                srcRect.y + srcRect.h / 2, f);
+                    var diag = Math.hypot(overlay.width, overlay.height);
+                    var screenScale = f.s * view.scale;
+                    families.forEach(function (fam, fi) {
+                        var spacing = fam.spacing * screenScale;
+                        if (spacing < 2) return;
+                        var angle = fam.lineAngle + view.rot * Math.PI / 180;
+                        var count = Math.min(600, Math.ceil((2 * diag) / spacing));
+                        ctx.save();
+                        ctx.translate(center.x, center.y);
+                        ctx.rotate(angle);
+                        ctx.strokeStyle = COLORS[fi % COLORS.length];
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        for (var k = -count; k <= count; k++) {
+                            var yy = k * spacing;
+                            ctx.moveTo(-diag, yy);
+                            ctx.lineTo(diag, yy);
+                        }
+                        ctx.stroke();
+                        ctx.restore();
+                    });
+                    ctx.restore();
+                    drawMeasureLine();
+                }
+                // Blue measured line + its thread-count range, mapped to screen.
+                function drawMeasureLine() {
+                    if (!measureLine) return;
+                    var f = fit();
+                    if (!f) return;
+                    var a = sourceToScreen(measureLine.x0, measureLine.y0, f);
+                    var b = sourceToScreen(measureLine.x1, measureLine.y1, f);
+                    ctx.strokeStyle = "#1e90ff";
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(a.x, a.y);
+                    ctx.lineTo(b.x, b.y);
+                    ctx.stroke();
+                    // small end caps
+                    ctx.fillStyle = "#1e90ff";
+                    [a, b].forEach(function (p) {
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, 3, 0, 2 * Math.PI);
+                        ctx.fill();
+                    });
+                }
+                rulerRedraw = function () { if (srcRect || measureLine) drawResult(); };
+
+                function renderResults() {
+                    if (!families.length) { resultsEl.innerHTML = ""; return; }
+                    var html = "";
+                    families.forEach(function (fam, i) {
+                        var sw = "<span class='ruler-swatch' style='background:" +
+                            COLORS[i % COLORS.length] + "'></span>";
+                        html += "<li><span>" + sw + "set " + (i + 1) + " spacing</span>" +
+                            "<span class='val'>" + fam.spacing.toFixed(1) + " px</span></li>";
+                        html += "<li><span>set " + (i + 1) + " angle</span>" +
+                            "<span class='val'>" + fam.angleDeg.toFixed(1) + "\u00b0</span></li>";
+                    });
+                    resultsEl.innerHTML = html;
+                }
+
+                // --- selection / measurement interaction -------------------------
+                function beginSelect() {
+                    if (obsSquare.classList.contains("empty")) return;
+                    // Load a CORS-enabled copy so the analysis canvas isn't tainted.
+                    // (Works for hosts that send CORS headers, e.g. the iNaturalist
+                    // open-data bucket.)
+                    var url = photoItems[currentIndex] && photoItems[currentIndex].main;
+                    if (url && url !== crossUrl) {
+                        crossImg = new Image();
+                        crossImg.crossOrigin = "anonymous";
+                        crossImg.src = url;
+                        crossUrl = url;
+                    }
+                    captureMode = "rect";
+                    startPt = curPt = null;
+                    calBtn.classList.add("active");
+                    calBtn.textContent = "Cancel";
+                    overlay.classList.add("selecting");
+                    statusEl2.textContent = "Reset rotation. Drag a rectangle over the fabric.";
+                    // Reset rotation only; keep scale/pan.
+                    setRotation(0);
+                }
+                function beginMeasure() {
+                    if (obsSquare.classList.contains("empty") || !families.length) return;
+                    captureMode = "line";
+                    startPt = curPt = null;
+                    measureBtn.classList.add("active");
+                    measureBtn.textContent = "Cancel";
+                    overlay.classList.add("selecting");
+                    measureStatus.textContent = "Drag a line across the threads.";
+                }
+                function endCapture() {
+                    captureMode = null;
+                    dragging = false;
+                    calBtn.classList.remove("active");
+                    calBtn.textContent = "Calibrate";
+                    measureBtn.classList.remove("active");
+                    measureBtn.textContent = "Measure";
+                    overlay.classList.remove("selecting");
+                }
+
+                function finishRect() {
+                    var f = fit();
+                    if (!f || !startPt || !curPt) { endCapture(); return; }
+                    var a = screenToSource(startPt.x, startPt.y, f);
+                    var b = screenToSource(curPt.x, curPt.y, f);
+                    var x0 = Math.max(0, Math.min(a.x, b.x));
+                    var y0 = Math.max(0, Math.min(a.y, b.y));
+                    var x1 = Math.min(f.nw, Math.max(a.x, b.x));
+                    var y1 = Math.min(f.nh, Math.max(a.y, b.y));
+                    var w = x1 - x0, h = y1 - y0;
+                    endCapture();
+                    if (w < 24 || h < 24) {
+                        statusEl2.textContent = "Selection too small; try again.";
+                        return;
+                    }
+                    if (!crossImg || !crossImg.complete) {
+                        statusEl2.textContent = "Image still loading; try again.";
+                        return;
+                    }
+                    if (!crossImg.naturalWidth) {
+                        statusEl2.textContent =
+                            "Could not load image for analysis (cross-origin).";
+                        return;
+                    }
+                    var res = analyse(crossImg, { x: x0, y: y0, w: w, h: h });
+                    if (!res || res.error) {
+                        statusEl2.textContent = (res && res.error) || "Analysis failed.";
+                        srcRect = null; families = []; renderResults(); clearCanvas();
+                        measureBtn.hidden = true; measureLine = null;
+                        measureStatus.textContent = "";
+                        return;
+                    }
+                    srcRect = { x: x0, y: y0, w: w, h: h };
+                    families = res.families;
+                    statusEl2.textContent = "Detected " + families.length +
+                        " thread set" + (families.length === 1 ? "" : "s") +
+                        " (window " + res.n + "px).";
+                    renderResults();
+                    // A fresh calibration invalidates any previous measurement.
+                    measureLine = null;
+                    measureStatus.textContent = "";
+                    measureBtn.hidden = false;
+                    drawResult();
+                }
+
+                function finishMeasure() {
+                    var f = fit();
+                    if (!f || !startPt || !curPt) { endCapture(); return; }
+                    var a = screenToSource(startPt.x, startPt.y, f);
+                    var b = screenToSource(curPt.x, curPt.y, f);
+                    endCapture();
+                    var len = Math.hypot(b.x - a.x, b.y - a.y);
+                    if (len < 4) {
+                        measureStatus.textContent = "Line too short; try again.";
+                        return;
+                    }
+                    measureLine = { x0: a.x, y0: a.y, x1: b.x, y1: b.y };
+                    // Distance in threads = length / spacing for each thread set; the
+                    // two spacings give a smaller..larger bracket.
+                    var counts = families.map(function (fam) { return len / fam.spacing; });
+                    var lo = Math.min.apply(null, counts);
+                    var hi = Math.max.apply(null, counts);
+                    var text = (counts.length > 1 && Math.abs(hi - lo) > 0.05)
+                        ? lo.toFixed(1) + " \u2013 " + hi.toFixed(1) + " threads"
+                        : lo.toFixed(1) + " threads";
+                    measureStatus.textContent =
+                        len.toFixed(0) + " px \u2192 " + text;
+                    drawResult();
+                }
+
+                overlay.addEventListener("pointerdown", function (e) {
+                    if (!captureMode) return;
+                    dragging = true;
+                    startPt = curPt = localPoint(e);
+                    try { overlay.setPointerCapture(e.pointerId); } catch (_) {}
+                    if (captureMode === "rect") drawLiveRect(); else drawLiveLine();
+                });
+                overlay.addEventListener("pointermove", function (e) {
+                    if (!captureMode || !dragging) return;
+                    curPt = localPoint(e);
+                    if (captureMode === "rect") drawLiveRect(); else drawLiveLine();
+                });
+                overlay.addEventListener("pointerup", function (e) {
+                    if (!captureMode || !dragging) return;
+                    curPt = localPoint(e);
+                    try { overlay.releasePointerCapture(e.pointerId); } catch (_) {}
+                    if (captureMode === "rect") finishRect(); else finishMeasure();
+                });
+
+                calBtn.addEventListener("click", function () {
+                    if (captureMode === "rect") {
+                        endCapture();
+                        statusEl2.textContent = "Calibration cancelled.";
+                        return;
+                    }
+                    if (captureMode === "line") endCapture();
+                    beginSelect();
+                });
+                measureBtn.addEventListener("click", function () {
+                    if (captureMode === "line") {
+                        endCapture();
+                        measureStatus.textContent = "Measurement cancelled.";
+                        return;
+                    }
+                    if (captureMode === "rect") endCapture();
+                    beginMeasure();
+                });
+
+                rulerClear = function () {
+                    endCapture();
+                    srcRect = null;
+                    families = [];
+                    startPt = curPt = null;
+                    measureLine = null;
+                    measureBtn.hidden = true;
+                    measureStatus.textContent = "";
+                    crossImg = null; crossUrl = null;
+                    clearCanvas();
+                    resultsEl.innerHTML = "";
+                    statusEl2.textContent =
+                        "Click Calibrate, then drag a rectangle over the fabric " +
+                        "background to measure thread spacing and angle.";
+                };
+            })();
+
+            loadBtn.addEventListener("click", load);
+            input.addEventListener("keydown", function (e) {
+                if (e.key === "Enter") { load(); e.preventDefault(); }
+            });
+        })();
+    </script>
+</body>
+</html>
