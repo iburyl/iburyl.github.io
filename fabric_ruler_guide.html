@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Fabric Ruler &ndash; Quick Guide</title>
+    <style>
+        :root {
+            --fg: #1f2937;
+            --muted: #6b7280;
+            --accent: #2563eb;
+            --line: #e5e7eb;
+            --card: #f9fafb;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                Helvetica, Arial, sans-serif;
+            color: var(--fg);
+            line-height: 1.55;
+            background: #fff;
+        }
+        .wrap { max-width: 860px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+        header.page {
+            border-bottom: 1px solid var(--line);
+            padding-bottom: 1.25rem;
+            margin-bottom: 2rem;
+        }
+        h1 { font-size: 1.9rem; margin: 0 0 0.35rem; }
+        .lede { color: var(--muted); font-size: 1.05rem; margin: 0; }
+        .toolbtn {
+            display: inline-block; margin-top: 1rem; font-size: 0.95rem;
+            color: var(--accent); text-decoration: none; font-weight: 600;
+        }
+        .toolbtn:hover { text-decoration: underline; }
+
+        h2 {
+            font-size: 1.25rem; margin: 2.5rem 0 0.75rem;
+            display: flex; align-items: baseline; gap: 0.6rem;
+        }
+        .num {
+            flex: 0 0 auto; width: 1.9rem; height: 1.9rem; border-radius: 50%;
+            background: var(--accent); color: #fff; font-size: 0.95rem;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-weight: 700;
+        }
+        p { margin: 0.6rem 0; }
+        figure {
+            margin: 1rem 0 0; border: 1px solid var(--line); border-radius: 10px;
+            overflow: hidden; background: var(--card);
+        }
+        figure img { display: block; width: 100%; height: auto; }
+        figcaption {
+            font-size: 0.85rem; color: var(--muted);
+            padding: 0.6rem 0.9rem; border-top: 1px solid var(--line);
+        }
+        .fig-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+        .fig-row figure { flex: 1 1 300px; margin-top: 1rem; }
+
+        .callout {
+            background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px;
+            padding: 0.9rem 1.1rem; margin: 1.25rem 0; font-size: 0.95rem;
+        }
+        .callout strong { color: var(--accent); }
+        code, kbd {
+            background: #f1f5f9; border: 1px solid var(--line); border-radius: 4px;
+            padding: 0.05rem 0.35rem; font-size: 0.9em;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+        .keys { white-space: nowrap; }
+        ul { margin: 0.6rem 0; padding-left: 1.3rem; }
+        li { margin: 0.3rem 0; }
+
+        table.controls {
+            width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.95rem;
+        }
+        table.controls th, table.controls td {
+            text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--line);
+            vertical-align: top;
+        }
+        table.controls th { color: var(--muted); font-weight: 600; width: 34%; }
+        .glyph {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 1.6rem; height: 1.6rem; border-radius: 4px; margin-right: 0.4rem;
+            background: #374151; color: #fff; font-size: 0.9rem; vertical-align: middle;
+        }
+        footer.page {
+            margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--line);
+            color: var(--muted); font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <header class="page">
+            <h1>Fabric Ruler &ndash; Quick Guide</h1>
+            <p class="lede">
+                Measure real-world sizes from a photo by using the regular weave of a
+                fabric background as a built-in ruler. Works on iNaturalist
+                observations or your own images &mdash; everything runs in your browser.
+            </p>
+            <a class="toolbtn" href="fabric_ruler.html">&rarr; Open the Fabric Ruler</a>
+        </header>
+
+        <div class="callout">
+            <strong>The idea:</strong> many specimens are photographed on woven fabric
+            whose threads sit at a fixed, repeating pitch. The tool detects that pitch
+            with a Fourier analysis, so once you know (or measure) the real size of one
+            thread, you can convert any pixel distance into millimetres.
+        </div>
+
+        <h2><span class="num">1</span> Load an image</h2>
+        <p>
+            Use the observation link from iNaturalist (e.g.
+            <code>https://www.inaturalist.org/observations/383190436</code>) or load
+            image from you computer.
+        </p>
+        <figure>
+            <img src="moth_ruler_guide/ruler_screen_shot_1.png"
+                 alt="The tool after loading an observation.">
+            <figcaption>
+                A loaded observation. Use the toolbar under the image to zoom, pan and
+                rotate; click a thumbnail below to switch photos from the observation.
+            </figcaption>
+        </figure>
+
+        <h2><span class="num">2</span> Calibrate on the fabric</h2>
+        <p>
+            Open the <strong>Ruler</strong> panel on the right and click
+            <kbd>Calibrate</kbd>. You drag a rectangle
+            over a clean patch of the woven background &mdash; away from the specimen and
+            other objects.
+        </p>
+        <p>
+            The tool runs a 2D FFT over that patch and reports up to <strong>two thread
+            sets</strong> (the warp and weft), each with its <em>spacing</em> in pixels
+            and its <em>angle</em>. A small preview swatch shows the detected grid drawn
+            in red and orange over the weave.
+        </p>
+        <div class="fig-row">
+            <figure>
+                <img src="moth_ruler_guide/ruler_screen_shot_2.png"
+                     alt="Calibration results with two detected thread sets.">
+                <figcaption>
+                    Two thread sets detected: set&nbsp;1 at 5.0&nbsp;px / 69.6&deg; and
+                    set&nbsp;2 at 9.5&nbsp;px / 157.8&deg;.
+                </figcaption>
+            </figure>
+            <figure>
+                <img src="moth_ruler_guide/ruler_screen_shot_2_1.png"
+                     alt="Close-up of the detected thread grid over the weave.">
+                <figcaption>
+                    It is important to to check, that the detected grid (red + orange lines)
+                    sits on top of the real threads. If it doesn't (as on this image),
+                    re-calibrate on a cleaner patch.
+                </figcaption>
+            </figure>
+        </div>
+
+        <h2><span class="num">3</span> Set your scale with a known reference</h2>
+        <p>
+            Click <kbd>Measure</kbd> and drag a line across something whose real size you
+            know &mdash; here, the <strong>0&ndash;2&nbsp;cm</strong> span of the real
+            ruler (20&nbsp;mm). The panel shows the line length in pixels and how many
+            threads it spans.
+        </p>
+        <p>
+            Choose the <strong>known object size</strong> mode, type the real length
+            (<code>20</code>&nbsp;mm), and the tool reports the physical size of a single
+            thread as an <code>x&nbsp;&ndash;&nbsp;y</code> range (one value per thread
+            set). That range is your calibration.
+        </p>
+        <figure>
+            <img src="moth_ruler_guide/ruler_screen_shot_3.png"
+                 alt="Measuring a known 20 mm ruler span to derive mm per thread.">
+            <figcaption>
+                A 20&nbsp;mm span measured as 475&nbsp;px &rarr; 49.9&ndash;94.8 threads,
+                giving <strong>0.21&ndash;0.40&nbsp;mm&nbsp;/&nbsp;thread</strong>.
+            </figcaption>
+        </figure>
+
+        <h2><span class="num">4</span> Measure the specimen</h2>
+        <p>
+            Switch to the <strong>known mm/thread</strong> mode. Now you can type (copy-paste)
+            the known mm/thread metric for your fabric (in this case it carried on mm/thread range you
+            just derived).
+        </p>
+        <p>
+            Now <kbd>Measure</kbd> a line across the specimen &mdash; e.g. the wingspan
+            &mdash; and read the estimated real size as an
+            <code>x&nbsp;&ndash;&nbsp;y</code> range in millimetres.
+        </p>
+        <div class="fig-row">
+            <figure>
+                <img src="moth_ruler_guide/ruler_screen_shot_4.png"
+                     alt="Measuring the moth wingspan using the calibrated thread size.">
+                <figcaption>
+                    Wingspan: 684&nbsp;px &rarr; object size
+                    <strong>28.7&nbsp;mm</strong>.
+                </figcaption>
+            </figure>
+            <figure>
+                <img src="moth_ruler_guide/ruler_screen_shot_5.png"
+                     alt="Re-measuring after adjusting the view.">
+                <figcaption>
+                    Re-measuring the same wingspan based on another calibraion from the fabric
+                    patch which is not as flat
+                    gives 27.7&ndash;33.9&nbsp;mm &mdash; -
+                    the range reflects the two thread sets' uncertainty.
+                </figcaption>
+            </figure>
+        </div>
+
+        <h2><span class="num">5</span> Reuse the scale across photos</h2>
+        <p>
+            As long as the fabric is the same, the estimated mm/thread can be reused,
+            but re-calibration is needed to take into account the changed distance from the fabric.
+        </p>
+        <figure>
+            <img src="moth_ruler_guide/ruler_screen_shot_6.png"
+                 alt="Measuring a second specimen photo.">
+            <figcaption>
+                Another photo on the presumably same fabric, another moth, but we can reuse
+                the mm/thread metric and estimat the wings spread: 956&nbsp;px &rarr;
+                25.2&ndash;28.2&nbsp;mm.
+            </figcaption>
+        </figure>
+
+        <div class="callout">
+            <strong>Why a range?</strong> The two thread sets rarely have identical
+            spacing, and the measured line may not run exactly along one of them. The
+            <code>x&nbsp;&ndash;&nbsp;y</code> range brackets the estimate between the
+            finer and coarser thread scales.
+        </div>
+
+        <footer class="page">
+            Fabric Ruler runs entirely in your browser &mdash; no image is uploaded.
+            <a href="fabric_ruler.html">Open the tool &rarr;</a>
+        </footer>
+    </div>
+</body>
+</html>
