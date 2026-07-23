@@ -29,6 +29,12 @@
             border-radius: 6px; background: #2563eb; color: #fff; cursor: pointer;
         }
         .obs-input button:disabled { opacity: 0.6; cursor: default; }
+        .obs-input .file-btn {
+            font: inherit; padding: 0.5rem 1rem; border: 1px solid #8884;
+            border-radius: 6px; background: #8881; color: inherit; cursor: pointer;
+            display: inline-flex; align-items: center; white-space: nowrap;
+        }
+        .obs-input .file-btn:hover { border-color: #2563eb; }
         #obs-status { margin: 0 0 0.75rem; min-height: 1.2em; }
 
         .obs-layout { display: flex; gap: 1.25rem; align-items: flex-start; flex-wrap: wrap; }
@@ -385,6 +391,10 @@
             <input type="text" id="obs-url" autofocus
                    placeholder="https://www.inaturalist.org/observations/43">
             <button type="button" id="obs-load">Load</button>
+            <label class="file-btn" title="Analyse an image file from your computer">
+                Local&#8230;
+                <input type="file" id="obs-file" accept="image/*" hidden>
+            </label>
         </div>
         <p id="obs-status" class="muted"></p>
 
@@ -438,6 +448,7 @@
         (function () {
             var input = document.getElementById("obs-url");
             var loadBtn = document.getElementById("obs-load");
+            var fileInput = document.getElementById("obs-file");
             var obsSquare = document.getElementById("obs-square");
             var obsStrip = document.getElementById("obs-strip");
             var metaEl = document.getElementById("obs-meta");
@@ -644,6 +655,23 @@
                 metaEl.innerHTML = html;
             }
 
+            // Tracks the current local object URL so it can be revoked on replace.
+            var objectUrl = null;
+            function revokeObjectUrl() {
+                if (objectUrl) { URL.revokeObjectURL(objectUrl); objectUrl = null; }
+            }
+
+            function loadLocalFile(file) {
+                if (!file) return;
+                revokeObjectUrl();
+                objectUrl = URL.createObjectURL(file);
+                statusEl.textContent = "";
+                metaEl.innerHTML =
+                    "<li><span>source</span><span class='val'>local file</span></li>" +
+                    "<li><span>name</span><span class='val'>" + esc(file.name) + "</span></li>";
+                renderObservation([{ main: objectUrl, thumb: objectUrl }]);
+            }
+
             function load() {
                 var id = parseId(input.value);
                 if (!id) {
@@ -651,6 +679,7 @@
                     return;
                 }
                 statusEl.textContent = "Loading\u2026";
+                revokeObjectUrl();
                 renderObservation([]);
                 metaEl.innerHTML = "";
                 loadBtn.disabled = true;
@@ -913,6 +942,8 @@
                 // would otherwise block getImageData. The *displayed* image still
                 // loads directly; only this analysis copy is proxied.
                 function analysisSrc(url) {
+                    // Local files (object/data URLs) are same-origin: use directly.
+                    if (/^(blob:|data:)/.test(url)) return url;
                     var stripped = String(url).replace(/^https?:\/\//, "");
                     return "https://images.weserv.nl/?url=" +
                         encodeURIComponent("ssl:" + stripped);
@@ -1084,6 +1115,11 @@
             loadBtn.addEventListener("click", load);
             input.addEventListener("keydown", function (e) {
                 if (e.key === "Enter") { load(); e.preventDefault(); }
+            });
+            fileInput.addEventListener("change", function (e) {
+                var f = e.target.files && e.target.files[0];
+                if (f) loadLocalFile(f);
+                e.target.value = "";  // allow re-selecting the same file
             });
         })();
     </script>
