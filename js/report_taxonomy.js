@@ -138,23 +138,41 @@ window.IR = window.IR || {};
     // Map each observed taxon_id to the id it should be counted as:
     //   - species (rank_level 10) -> itself
     //   - below species -> its species ancestor (subspecies collapse into species)
-    //   - above species observed directly -> itself (counts as its own taxon)
+    //   - above species observed directly -> itself, but ONLY if nothing finer was
+    //     observed under it; a coarse ID whose descendants were also observed is
+    //     "covered" and dropped (so it isn't miscounted as a distinct/new taxon)
+    // Taxa not present in the returned map are excluded from all taxon counts.
     IR.buildNormalizationMap = function (observations, cache) {
         const map = new Map();
-        observations.forEach((obs) => {
-            const t = Number(obs.taxon_id);
-            if (map.has(t)) return;
 
+        // Unique observed taxa.
+        const observed = new Set();
+        observations.forEach((obs) => observed.add(Number(obs.taxon_id)));
+
+        // Every ancestor of an observed taxon has an observed descendant of
+        // strictly lower rank, so an observation identified only to that coarser
+        // taxon is already represented by finer ones.
+        const covered = new Set();
+        observed.forEach((t) => {
+            const card = cache.get(t);
+            if (card) (card.ancestor_ids || []).forEach((a) => covered.add(Number(a)));
+        });
+
+        observed.forEach((t) => {
             const card = cache.get(t);
             if (!card) return;
+            const rl = card.rank_level;
 
-            if (typeof card.rank_level === 'number' && card.rank_level < 10) {
+            if (typeof rl === 'number' && rl < 10) {
                 let speciesId = null;
                 (card.ancestor_ids || []).forEach((aid) => {
                     const ac = cache.get(Number(aid));
                     if (ac && ac.rank_level === 10) speciesId = Number(aid);
                 });
                 map.set(t, speciesId !== null ? speciesId : t);
+            } else if (typeof rl === 'number' && rl > 10) {
+                if (!covered.has(t)) map.set(t, t);
+                // else: coarse ID covered by finer observations -> excluded
             } else {
                 map.set(t, t);
             }
