@@ -99,8 +99,19 @@
         }
         .ruler-body button.active { background: #ef4444; border-color: #ef4444; }
         .ruler-body button + button { margin-left: 0.4rem; }
+        .ruler-body button.diag-btn {
+            border: 1px solid #8884; background: #8881; color: inherit;
+            padding: 0.35rem 0.6rem; line-height: 1;
+        }
+        .ruler-body button.diag-btn:hover { border-color: #2563eb; }
+        .ruler-body button.diag-btn.active { background: #8881; border-color: #2563eb; }
         #ruler-status, #ruler-measure-status { margin: 0.5rem 0 0; }
-        .ruler-swatch { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 2px; margin-right: 0.35rem; vertical-align: middle; }
+        .ruler-swatch { display: inline-block; width: 0.7rem; height: 0.7rem; border-radius: 2px; vertical-align: middle; }
+        .ruler-table { border-collapse: collapse; font-size: 0.85rem; margin: 0.5rem 0 0; }
+        .ruler-table th, .ruler-table td { padding: 0.15rem 0.6rem; text-align: right; white-space: nowrap; }
+        .ruler-table th { color: #6b7280; font-weight: 600; }
+        .ruler-table th:first-child, .ruler-table td:first-child { padding-left: 0; width: 1rem; text-align: center; }
+        .ruler-table td.thread-idx { text-align: center; }
         .ruler-phys { margin-top: 0.75rem; border-top: 1px dashed #8883; padding-top: 0.6rem; }
         .ruler-phys[hidden] { display: none; }
         .phys-modes { display: flex; gap: 0.75rem; font-size: 0.85rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
@@ -199,7 +210,7 @@
     <!-- FFT-result interpretation: window.MothFabricAnalysis -->
     <script>
         (function () {
-            function analysePeaks(re, im, n, lum) {
+            function analysePeaks(re, im, n, lum, opts) {
                 // Power spectrum with a mild high-pass (drop DC + lowest bins) so the
                 // autocorrelation's central lobe stays narrow. Zeroing rho < hp also
                 // caps the largest detectable spacing at ~N/hp, matching rmax below.
@@ -387,6 +398,47 @@
                     };
                 }
 
+                function angDiff180(a, b) {
+                    var d = Math.abs(a - b) % 180;
+                    return Math.min(d, 180 - d);
+                }
+
+                // Optional focused search: restrict thread directions to those near a
+                // target line angle (e.g. 45deg), for fabrics whose diagonal weave
+                // dominates the spectrum. Both perpendicular directions around the
+                // target are kept, and weaker peaks (not just the global-threshold
+                // ones) are considered so a subdominant diagonal can still be found.
+                if (opts && typeof opts.focusDeg === "number") {
+                    var focusDeg = opts.focusDeg, ftol = 25;
+                    var diagCands = cands.filter(function (c) {
+                        var lineAng = Math.atan2(c.ly, c.lx) * 180 / Math.PI + 90;
+                        lineAng = ((lineAng % 180) + 180) % 180;
+                        return Math.min(angDiff180(lineAng, focusDeg),
+                                        angDiff180(lineAng, focusDeg + 90)) <= ftol;
+                    });
+                    if (!diagCands.length) {
+                        var shownDeg = ((Math.round(focusDeg) % 180) + 180) % 180;
+                        return { error: "No pattern found near " + shownDeg + "\u00b0." };
+                    }
+                    // A dominant diagonal usually carries a strong sub-harmonic at
+                    // ~2x the real thread spacing, so choosing by strength alone locks
+                    // onto that larger mode. Instead keep the significant peaks in this
+                    // direction and prefer the fundamental (smallest spacing / lag).
+                    var maxDiag = 0;
+                    diagCands.forEach(function (c) { if (c.val > maxDiag) maxDiag = c.val; });
+                    var strong = diagCands.filter(function (c) { return c.val >= 0.25 * maxDiag; });
+                    strong.sort(function (a, b) { return a.r - b.r; });
+                    var dout = [];
+                    for (var di = 0; di < strong.length && dout.length < 2; di++) {
+                        var dfam = finalize(makeFamily(strong[di]));
+                        var dup = dout.some(function (f) {
+                            return angDiff180(f.angleDeg, dfam.angleDeg) < 15;
+                        });
+                        if (!dup) dout.push(dfam);
+                    }
+                    return { families: dout, n: n };
+                }
+
                 // Each thread direction is fitted independently from its own collinear
                 // harmonics (spacing + coarse angle), then its angle is refined.
                 var out = [finalize(makeFamily(sig[0]))];
@@ -448,12 +500,13 @@
                     <summary>Ruler</summary>
                     <div class="ruler-body">
                         <button type="button" id="ruler-calibrate">Calibrate</button>
+                        <button type="button" id="ruler-diagonal" class="diag-btn" hidden
+                                title="Toggle threads 45&deg; from the calibrated pattern">&#8635;</button>
                         <button type="button" id="ruler-measure" hidden>Measure</button>
                         <p class="muted" id="ruler-status">
-                            Click Calibrate, then drag a rectangle over the fabric
-                            background to measure thread spacing and angle.
+                            Click Calibrate, then drag over the fabric.
                         </p>
-                        <ul class="meta-list" id="ruler-results"></ul>
+                        <div id="ruler-results"></div>
                         <p class="muted" id="ruler-measure-status"></p>
 
                         <div class="ruler-phys" id="ruler-phys" hidden>
@@ -755,6 +808,7 @@
                 var overlay = document.getElementById("obs-overlay");
                 var ctx = overlay.getContext("2d");
                 var calBtn = document.getElementById("ruler-calibrate");
+                var diagBtn = document.getElementById("ruler-diagonal");
                 var measureBtn = document.getElementById("ruler-measure");
                 var statusEl2 = document.getElementById("ruler-status");
                 var resultsEl = document.getElementById("ruler-results");
@@ -770,6 +824,8 @@
                 var startPt = null, curPt = null;   // square-relative pixels
                 var srcRect = null;         // {x, y, w, h} in source image pixels
                 var families = [];          // [{spacing, angleDeg, lineAngle}]
+                var diagActive = false;     // showing derived 45deg threads?
+                var savedFamilies = null;   // calibration families, for toggling back
                 var measureLine = null;     // {x0, y0, x1, y1} in source image pixels
                 var measureLen = 0;         // measured line length in source pixels
                 var crossImg = null, crossUrl = null;
@@ -832,7 +888,7 @@
                 // (MothFFT), and interpret the spectrum into thread families
                 // (MothFabricAnalysis). `cimg` must be CORS-enabled so the canvas
                 // isn't tainted.
-                function analyse(cimg, rect) {
+                function analyse(cimg, rect, opts) {
                     var n = MothFFT.pow2Floor(Math.min(rect.w, rect.h));
                     n = Math.max(64, Math.min(512, n));
                     var cx = rect.x + rect.w / 2, cy = rect.y + rect.h / 2;
@@ -871,7 +927,7 @@
                         }
                     }
                     MothFFT.fft2d(re, im, n);
-                    return MothFabricAnalysis.analysePeaks(re, im, n, lum);
+                    return MothFabricAnalysis.analysePeaks(re, im, n, lum, opts);
                 }
 
                 // --- drawing ------------------------------------------------------
@@ -1012,16 +1068,18 @@
 
                 function renderResults() {
                     if (!families.length) { resultsEl.innerHTML = ""; return; }
-                    var html = "";
-                    families.forEach(function (fam, i) {
+                    var rows = families.map(function (fam, i) {
                         var sw = "<span class='ruler-swatch' style='background:" +
                             COLORS[i % COLORS.length] + "'></span>";
-                        html += "<li><span>" + sw + "set " + (i + 1) + " spacing</span>" +
-                            "<span class='val'>" + fam.spacing.toFixed(1) + " px</span></li>";
-                        html += "<li><span>set " + (i + 1) + " angle</span>" +
-                            "<span class='val'>" + fam.angleDeg.toFixed(1) + "\u00b0</span></li>";
-                    });
-                    resultsEl.innerHTML = html;
+                        return "<tr><td>" + sw + "</td>" +
+                            "<td class='thread-idx'>" + (i + 1) + "</td>" +
+                            "<td>" + fam.spacing.toFixed(1) + " px</td>" +
+                            "<td>" + fam.angleDeg.toFixed(0) + "\u00b0</td></tr>";
+                    }).join("");
+                    resultsEl.innerHTML =
+                        "<table class='ruler-table'><thead><tr>" +
+                        "<th></th><th>Thread</th><th>spacing</th><th>angle</th>" +
+                        "</tr></thead><tbody>" + rows + "</tbody></table>";
                 }
 
                 // --- physical dimensions -----------------------------------------
@@ -1136,7 +1194,7 @@
                     calBtn.classList.add("active");
                     calBtn.textContent = "Cancel";
                     overlay.classList.add("selecting");
-                    statusEl2.textContent = "Reset rotation. Drag a rectangle over the fabric.";
+                    statusEl2.textContent = "Drag over the fabric.";
                     // Reset rotation only; keep scale/pan.
                     setRotation(0);
                 }
@@ -1147,7 +1205,7 @@
                     measureBtn.classList.add("active");
                     measureBtn.textContent = "Cancel";
                     overlay.classList.add("selecting");
-                    measureStatus.textContent = "Drag a line across the threads.";
+                    measureStatus.textContent = "Drag across the threads.";
                 }
                 function endCapture() {
                     captureMode = null;
@@ -1187,16 +1245,18 @@
                     if (!res || res.error) {
                         statusEl2.textContent = (res && res.error) || "Analysis failed.";
                         srcRect = null; families = []; renderResults(); clearCanvas();
-                        measureBtn.hidden = true; measureLine = null; measureLen = 0;
+                        diagActive = false; savedFamilies = null; diagBtn.classList.remove("active");
+                        measureBtn.hidden = true; diagBtn.hidden = true;
+                        measureLine = null; measureLen = 0;
                         measureStatus.textContent = "";
                         physWrap.hidden = true; physOutput.value = "";
                         return;
                     }
                     srcRect = { x: x0, y: y0, w: w, h: h };
                     families = res.families;
-                    statusEl2.textContent = "Detected " + families.length +
-                        " thread set" + (families.length === 1 ? "" : "s") +
-                        " (window " + res.n + "px).";
+                    diagActive = false; savedFamilies = null; diagBtn.classList.remove("active");
+                    statusEl2.textContent = families.length +
+                        " thread set" + (families.length === 1 ? "" : "s") + " detected.";
                     renderResults();
                     // A fresh calibration invalidates any previous measurement.
                     measureLine = null;
@@ -1205,6 +1265,7 @@
                     physWrap.hidden = true;
                     physOutput.value = "";
                     measureBtn.hidden = false;
+                    diagBtn.hidden = false;
                     drawResult();
                 }
 
@@ -1258,7 +1319,7 @@
                 calBtn.addEventListener("click", function () {
                     if (captureMode === "rect") {
                         endCapture();
-                        statusEl2.textContent = "Calibration cancelled.";
+                        statusEl2.textContent = "Cancelled.";
                         return;
                     }
                     if (captureMode === "line") endCapture();
@@ -1267,21 +1328,100 @@
                 measureBtn.addEventListener("click", function () {
                     if (captureMode === "line") {
                         endCapture();
-                        measureStatus.textContent = "Measurement cancelled.";
+                        measureStatus.textContent = "Cancelled.";
                         return;
                     }
                     if (captureMode === "rect") endCapture();
                     beginMeasure();
                 });
 
+                // When calibration locks onto a fabric's dominant diagonal weave, the
+                // real thread crossings are the *intersections* of the two detected
+                // diagonal families. In frequency space that lattice is the sum and
+                // difference of the two families' frequency vectors: rotated ~45deg
+                // and, for a near-orthogonal equal-spacing pair, sqrt(2) finer.
+                function combineToDiagonal(fams) {
+                    if (fams.length < 2) return null;
+                    function freqVec(f) {
+                        var a = (typeof f.freqAngle === "number")
+                            ? f.freqAngle : (f.lineAngle - Math.PI / 2);
+                        return { x: Math.cos(a) / f.spacing, y: Math.sin(a) / f.spacing };
+                    }
+                    var f1 = freqVec(fams[0]), f2 = freqVec(fams[1]);
+                    return [
+                        { x: f1.x + f2.x, y: f1.y + f2.y },
+                        { x: f1.x - f2.x, y: f1.y - f2.y },
+                    ].map(function (v) {
+                        var mag = Math.hypot(v.x, v.y);
+                        var freqAngle = Math.atan2(v.y, v.x);
+                        var lineAngle = freqAngle + Math.PI / 2;
+                        var deg = ((lineAngle * 180 / Math.PI) % 180 + 180) % 180;
+                        return {
+                            spacing: mag > 0 ? 1 / mag : 0, angleDeg: deg,
+                            lineAngle: lineAngle, freqAngle: freqAngle,
+                        };
+                    });
+                }
+
+                diagBtn.addEventListener("click", function () {
+                    if (!srcRect || !families.length) {
+                        statusEl2.textContent = "Calibrate first.";
+                        return;
+                    }
+                    if (captureMode) endCapture();
+
+                    if (diagActive) {
+                        // Second push: revert to the original calibration.
+                        families = savedFamilies;
+                        savedFamilies = null;
+                        diagActive = false;
+                        diagBtn.classList.remove("active");
+                        statusEl2.textContent = "Reverted to calibration.";
+                    } else {
+                        var derived = combineToDiagonal(families);
+                        if (derived) {
+                            savedFamilies = families;
+                            families = derived;
+                            statusEl2.textContent = "Showing 45\u00b0 threads.";
+                        } else {
+                            // Only one family found: fall back to an FFT search 45deg away.
+                            if (!crossImg || !crossImg.complete || !crossImg.naturalWidth) {
+                                statusEl2.textContent = "Image not ready; recalibrate.";
+                                return;
+                            }
+                            var res = analyse(crossImg, srcRect, { focusDeg: families[0].angleDeg + 45 });
+                            if (!res || res.error) {
+                                statusEl2.textContent = (res && res.error) || "No thread pattern found at 45\u00b0.";
+                                return;
+                            }
+                            savedFamilies = families;
+                            families = res.families;
+                            statusEl2.textContent = families.length +
+                                " thread set" + (families.length === 1 ? "" : "s") + " at 45\u00b0.";
+                        }
+                        diagActive = true;
+                        diagBtn.classList.add("active");
+                    }
+                    // Changing the thread sets invalidates any prior measurement.
+                    measureLine = null;
+                    measureLen = 0;
+                    measureStatus.textContent = "";
+                    physWrap.hidden = true;
+                    physOutput.value = "";
+                    renderResults();
+                    drawResult();
+                });
+
                 rulerClear = function () {
                     endCapture();
                     srcRect = null;
                     families = [];
+                    diagActive = false; savedFamilies = null; diagBtn.classList.remove("active");
                     startPt = curPt = null;
                     measureLine = null;
                     measureLen = 0;
                     measureBtn.hidden = true;
+                    diagBtn.hidden = true;
                     measureStatus.textContent = "";
                     physWrap.hidden = true;
                     physInput.value = "";
@@ -1289,9 +1429,7 @@
                     crossImg = null; crossUrl = null;
                     clearCanvas();
                     resultsEl.innerHTML = "";
-                    statusEl2.textContent =
-                        "Click Calibrate, then drag a rectangle over the fabric " +
-                        "background to measure thread spacing and angle.";
+                    statusEl2.textContent = "Click Calibrate, then drag over the fabric.";
                 };
             })();
 
