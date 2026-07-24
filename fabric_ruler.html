@@ -511,6 +511,16 @@
             function isCC(code) {
                 return !!code && code.toLowerCase().indexOf("cc") === 0;
             }
+            // Reflect the currently loaded observation in the URL (?inats_obs=id)
+            // so the page is shareable; pass null to drop the parameter.
+            function setUrlObsId(id) {
+                try {
+                    var url = new URL(window.location.href);
+                    if (id) url.searchParams.set("inats_obs", id);
+                    else url.searchParams.delete("inats_obs");
+                    history.replaceState(null, "", url);
+                } catch (_) {}
+            }
 
             // --- Interactive observation viewer: zoom / pan / rotate ---------------
             var view = { scale: 1, tx: 0, ty: 0, rot: 0 };
@@ -698,6 +708,7 @@
             function loadLocalFile(file) {
                 if (!file) return;
                 revokeObjectUrl();
+                setUrlObsId(null);
                 objectUrl = URL.createObjectURL(file);
                 statusEl.textContent = "";
                 metaEl.innerHTML =
@@ -726,6 +737,7 @@
                             return;
                         }
                         statusEl.textContent = "";
+                        setUrlObsId(id);
                         var items = (obs.photos || []).map(function (p) {
                             return { main: enlarge(p.url), thumb: p.url };
                         });
@@ -1292,6 +1304,16 @@
                 if (f) loadLocalFile(f);
                 e.target.value = "";  // allow re-selecting the same file
             });
+
+            // Optional deep link: ?inats_obs=<id> opens that observation on load.
+            (function () {
+                var initialId = null;
+                try { initialId = new URL(window.location.href).searchParams.get("inats_obs"); } catch (_) {}
+                if (initialId) {
+                    input.value = initialId;
+                    load();
+                }
+            })();
         })();
     </script>
 </body>
