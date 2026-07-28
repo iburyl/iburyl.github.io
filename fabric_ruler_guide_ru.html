@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Fabric Ruler &ndash; краткое руководство</title>
+    <style>
+        :root {
+            --fg: #1f2937;
+            --muted: #6b7280;
+            --accent: #2563eb;
+            --line: #e5e7eb;
+            --card: #f9fafb;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                Helvetica, Arial, sans-serif;
+            color: var(--fg);
+            line-height: 1.55;
+            background: #fff;
+        }
+        .wrap { max-width: 860px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+        header.page {
+            border-bottom: 1px solid var(--line);
+            padding-bottom: 1.25rem;
+            margin-bottom: 2rem;
+        }
+        h1 { font-size: 1.9rem; margin: 0 0 0.35rem; }
+        .lede { color: var(--muted); font-size: 1.05rem; margin: 0; }
+        .toolbtn {
+            display: inline-block; margin-top: 1rem; font-size: 0.95rem;
+            color: var(--accent); text-decoration: none; font-weight: 600;
+        }
+        .toolbtn:hover { text-decoration: underline; }
+
+        h2 {
+            font-size: 1.25rem; margin: 2.5rem 0 0.75rem;
+            display: flex; align-items: baseline; gap: 0.6rem;
+        }
+        .num {
+            flex: 0 0 auto; width: 1.9rem; height: 1.9rem; border-radius: 50%;
+            background: var(--accent); color: #fff; font-size: 0.95rem;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-weight: 700;
+        }
+        p { margin: 0.6rem 0; }
+        figure {
+            margin: 1rem 0 0; border: 1px solid var(--line); border-radius: 10px;
+            overflow: hidden; background: var(--card);
+        }
+        figure img { display: block; width: 100%; height: auto; }
+        figcaption {
+            font-size: 0.85rem; color: var(--muted);
+            padding: 0.6rem 0.9rem; border-top: 1px solid var(--line);
+        }
+        .fig-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+        .fig-row figure { flex: 1 1 300px; margin-top: 1rem; }
+
+        .callout {
+            background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px;
+            padding: 0.9rem 1.1rem; margin: 1.25rem 0; font-size: 0.95rem;
+        }
+        .callout strong { color: var(--accent); }
+        code, kbd {
+            background: #f1f5f9; border: 1px solid var(--line); border-radius: 4px;
+            padding: 0.05rem 0.35rem; font-size: 0.9em;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+        .keys { white-space: nowrap; }
+        ul { margin: 0.6rem 0; padding-left: 1.3rem; }
+        li { margin: 0.3rem 0; }
+
+        table.controls {
+            width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: 0.95rem;
+        }
+        table.controls th, table.controls td {
+            text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--line);
+            vertical-align: top;
+        }
+        table.controls th { color: var(--muted); font-weight: 600; width: 34%; }
+        .glyph {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 1.6rem; height: 1.6rem; border-radius: 4px; margin-right: 0.4rem;
+            background: #374151; color: #fff; font-size: 0.9rem; vertical-align: middle;
+        }
+        footer.page {
+            margin-top: 3rem; padding-top: 1.25rem; border-top: 1px solid var(--line);
+            color: var(--muted); font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <header class="page">
+            <h1>Fabric Ruler &ndash; краткое руководство</h1>
+            <p class="lede">
+                Измеряйте реальные размеры объектов на фотографии, используя регулярное
+                переплетение ткани в качестве встроенной линейки. Инструмент работает
+                с наблюдениями iNaturalist и с вашими собственными изображениями &mdash;
+                все вычисления выполняются непосредственно в браузере.
+            </p>
+            <a class="toolbtn" href="fabric_ruler.html">&rarr; Открыть Fabric Ruler</a>
+        </header>
+
+        <div class="callout">
+            <strong>Основная идея:</strong> многие экземпляры фотографируют на тканом полотне,
+            нити которого расположены с постоянным повторяющимся шагом. Инструмент
+            определяет этот шаг с помощью анализа Фурье. Зная или измерив реальный
+            размер одной нити, можно преобразовать любое расстояние в пикселях
+            в миллиметры.
+        </div>
+
+        <h2><span class="num">1</span> Загрузите изображение</h2>
+        <p>
+            Используйте ссылку на наблюдение iNaturalist, например
+            <code>https://www.inaturalist.org/observations/383190436</code>, или
+            загрузите изображение со своего компьютера.
+        </p>
+        <figure>
+            <img src="moth_ruler_guide/ruler_screen_shot_1.png"
+                 alt="Инструмент после загрузки наблюдения.">
+            <figcaption>
+                Загруженное наблюдение. Панель инструментов под изображением позволяет
+                изменять масштаб, перемещать и поворачивать изображение. Чтобы выбрать
+                другую фотографию из наблюдения, нажмите на соответствующую миниатюру.
+            </figcaption>
+        </figure>
+
+        <h2><span class="num">2</span> Выполните калибровку по ткани</h2>
+        <p>
+            Откройте панель <strong>Ruler</strong> справа и нажмите
+            <kbd>Calibrate</kbd>. Выделите прямоугольником чистый участок тканого фона,
+            расположенный вдали от экземпляра и других объектов.
+        </p>
+        <p>
+            Инструмент выполняет двумерное БПФ для выбранного участка и определяет до
+            <strong>двух наборов нитей</strong> — основы и утка. Для каждого набора
+            указываются <em>шаг</em> в пикселях и <em>угол</em>. В небольшом окне
+            предварительного просмотра обнаруженная сетка накладывается на ткань
+            красными и оранжевыми линиями.
+        </p>
+        <div class="fig-row">
+            <figure>
+                <img src="moth_ruler_guide/ruler_screen_shot_2.png"
+                     alt="Результаты калибровки с двумя обнаруженными наборами нитей.">
+                <figcaption>
+                    Обнаружены два набора нитей: набор&nbsp;1 — 5,0&nbsp;пикс. / 69,6&deg;,
+                    набор&nbsp;2 — 9,5&nbsp;пикс. / 157,8&deg;.
+                </figcaption>
+            </figure>
+            <figure>
+                <img src="moth_ruler_guide/ruler_screen_shot_2_1.png"
+                     alt="Увеличенное изображение обнаруженной сетки нитей поверх ткани.">
+                <figcaption>
+                    Важно проверить, что обнаруженная сетка — красные и оранжевые линии —
+                    совпадает с реальными нитями. Если совпадения нет, как на этом
+                    изображении, повторите калибровку на более чистом участке ткани.
+                </figcaption>
+            </figure>
+        </div>
+
+        <h2><span class="num">3</span> Задайте масштаб по известному эталону</h2>
+        <p>
+            Нажмите <kbd>Measure</kbd> и проведите линию вдоль объекта с известным
+            реальным размером. В данном примере используется участок обычной линейки
+            от <strong>0 до 2&nbsp;см</strong>, то есть 20&nbsp;мм. Панель покажет
+            длину линии в пикселях и количество нитей, которое она пересекает.
+        </p>
+        <p>
+            Выберите режим <strong>known object size</strong>, введите реальную длину
+            — <code>20</code>&nbsp;мм. Инструмент вычислит физический размер одной
+            нити в виде диапазона <code>x&nbsp;&ndash;&nbsp;y</code>: по одному значению
+            для каждого набора нитей. Этот диапазон и является результатом калибровки.
+        </p>
+        <figure>
+            <img src="moth_ruler_guide/ruler_screen_shot_3.png"
+                 alt="Измерение известного участка линейки длиной 20 мм для определения миллиметров на нить.">
+            <figcaption>
+                Участок длиной 20&nbsp;мм соответствует 475&nbsp;пикс. &rarr;
+                49,9&ndash;94,8 нити, что дает
+                <strong>0,21&ndash;0,40&nbsp;мм на нить</strong>.
+            </figcaption>
+        </figure>
+
+        <h2><span class="num">4</span> Измерьте экземпляр</h2>
+        <p>
+            Переключитесь в режим <strong>known mm/thread</strong>. Теперь можно ввести
+            или вставить известное значение в миллиметрах на нить для вашей ткани.
+            В данном случае используется только что рассчитанный диапазон.
+        </p>
+        <p>
+            Теперь нажмите <kbd>Measure</kbd>, проведите линию по экземпляру, например
+            вдоль размаха крыльев, и получите оценку реального размера в виде диапазона
+            <code>x&nbsp;&ndash;&nbsp;y</code> в миллиметрах.
+        </p>
+        <div class="fig-row">
+            <figure>
+                <img src="moth_ruler_guide/ruler_screen_shot_4.png"
+                     alt="Измерение размаха крыльев бабочки с использованием откалиброванного размера нитей.">
+                <figcaption>
+                    Размах крыльев: 684&nbsp;пикс. &rarr; размер объекта
+                    <strong>28,7&nbsp;мм</strong>.
+                </figcaption>
+            </figure>
+            <figure>
+                <img src="moth_ruler_guide/ruler_screen_shot_5.png"
+                     alt="Повторное измерение после изменения области калибровки.">
+                <figcaption>
+                    Повторное измерение того же размаха крыльев с использованием другой
+                    калибровки по менее ровному участку ткани дает
+                    27,7&ndash;33,9&nbsp;мм. Диапазон отражает расхождение между двумя
+                    наборами нитей.
+                </figcaption>
+            </figure>
+        </div>
+
+        <h2><span class="num">5</span> Используйте масштаб для других фотографий</h2>
+        <p>
+            Если используется та же ткань, рассчитанное значение в миллиметрах на нить
+            можно применять повторно. Однако калибровку по изображению необходимо
+            выполнить заново, чтобы учесть изменившееся расстояние до ткани.
+        </p>
+        <figure>
+            <img src="moth_ruler_guide/ruler_screen_shot_6.png"
+                 alt="Измерение экземпляра на другой фотографии.">
+            <figcaption>
+                Другая фотография, предположительно на той же ткани, и другая бабочка.
+                Значение в миллиметрах на нить можно использовать повторно:
+                размах крыльев 956&nbsp;пикс. &rarr; 25,2&ndash;28,2&nbsp;мм.
+            </figcaption>
+        </figure>
+
+        <div class="callout">
+            <strong>Почему результат задается диапазоном?</strong> Два набора нитей редко
+            имеют одинаковый шаг, а измерительная линия может проходить не точно вдоль
+            одного из них. Диапазон <code>x&nbsp;&ndash;&nbsp;y</code> ограничивает
+            оценку значениями, полученными по более мелкому и более крупному шагу нитей.
+        </div>
+
+        <footer class="page">
+            Fabric Ruler полностью работает в вашем браузере &mdash; изображения никуда
+            не загружаются.
+            <a href="fabric_ruler.html">Открыть инструмент &rarr;</a>
+        </footer>
+    </div>
+</body>
+</html>
