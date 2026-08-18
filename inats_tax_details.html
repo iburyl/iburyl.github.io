@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>iNaturalist Taxonomy Details from CSV</title>
+    <style>
+        :root { color-scheme: light dark; }
+        * { box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            margin: 0; padding: 0 1.5rem 3rem; line-height: 1.5;
+        }
+        header {
+            padding: 1.5rem 0; border-bottom: 1px solid #8883; margin-bottom: 1.5rem;
+        }
+        header h1 { margin: 0; font-size: 1.4rem; }
+        a { color: #2563eb; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .muted { color: #6b7280; font-size: 0.9rem; }
+
+        .report-form {
+            display: flex; flex-wrap: wrap; gap: 0.75rem 1rem;
+            align-items: flex-end; max-width: 960px; margin-bottom: 0.75rem;
+        }
+        .field { display: flex; flex-direction: column; gap: 0.25rem; }
+        .field.grow { flex: 1 1 320px; min-width: 240px; }
+        .field label {
+            font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: #6b7280;
+        }
+        .field input, .field select {
+            font: inherit; padding: 0.5rem 0.7rem; border: 1px solid #8884;
+            border-radius: 6px; background: transparent; color: inherit;
+        }
+        .report-form button {
+            font: inherit; padding: 0.5rem 1.2rem; border: 1px solid #2563eb;
+            border-radius: 6px; background: #2563eb; color: #fff; cursor: pointer;
+        }
+        .report-form button:disabled { opacity: 0.6; cursor: default; }
+        .report-form button.secondary {
+            background: transparent; color: #2563eb;
+        }
+        #status { margin: 0.25rem 0 0; min-height: 1.2em; }
+
+        #report { margin-top: 1.5rem; }
+        #report h2 {
+            font-size: 1.15rem; margin: 1.75rem 0 0.6rem; padding-bottom: 0.3rem;
+            border-bottom: 1px solid #8883;
+        }
+        table { border-collapse: collapse; margin: 0.25rem 0 0.75rem; font-size: 0.9rem; max-width: 100%; }
+        th {
+            font-weight: 600; color: #6b7280; border-bottom: 2px solid #8884;
+            white-space: nowrap; text-align: left; padding: 0.35rem 0.7rem;
+            position: sticky; top: 0; background: Canvas;
+        }
+        td { border-bottom: 1px solid #8882; padding: 0.35rem 0.7rem; vertical-align: middle; text-align: left; }
+        tbody tr:hover td { background: #8881; }
+        td.pending { color: #6b7280; }
+        td.note { color: #b45309; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>iNaturalist Taxonomy Details from CSV</h1>
+    </header>
+
+    <p class="muted">
+        Pick a CSV file and the column holding taxa; its first row is read as the header.
+        Values that are numbers are treated as iNaturalist taxon ids, anything else as a
+        species (or other taxon) name.
+    </p>
+
+    <form id="report-form" class="report-form">
+        <div class="field grow">
+            <label for="file">CSV file</label>
+            <input type="file" id="file" accept=".csv,.tsv,.txt,text/csv">
+        </div>
+        <div class="field grow">
+            <label for="column">Column name</label>
+            <select id="column" disabled>
+                <option value="">load a CSV file first</option>
+            </select>
+        </div>
+        <button type="submit" id="generate" disabled>Fetch details</button>
+        <button type="button" id="download" class="secondary" disabled>Download CSV</button>
+    </form>
+    <p id="status" class="muted"></p>
+
+    <div id="report"></div>
+
+    <script>
+        var JS_VERSION = Date.now();
+        document.write('<script src="js/tax_details.js?v=' + JS_VERSION + '"><\/script>');
+    </script>
+
+    <script>
+        (function () {
+            const form = document.getElementById('report-form');
+            const fileInput = document.getElementById('file');
+            const columnSelect = document.getElementById('column');
+            const generateBtn = document.getElementById('generate');
+            const downloadBtn = document.getElementById('download');
+            const statusEl = document.getElementById('status');
+            const target = document.getElementById('report');
+
+            let csvRows = [];        // parsed source file, header included
+            let sourceName = 'taxa';
+            let resultRows = [];     // last rendered result, one object per input row
+
+            function setStatus(text, isError) {
+                statusEl.textContent = text;
+                statusEl.style.color = isError ? '#ef4444' : '';
+            }
+
+            function columnLabel(header, index) {
+                const name = String(header || '').trim();
+                return name || 'column ' + (index + 1);
+            }
+
+            fileInput.addEventListener('change', async function () {
+                const file = fileInput.files && fileInput.files[0];
+                columnSelect.innerHTML = '';
+                columnSelect.disabled = true;
+                generateBtn.disabled = true;
+                downloadBtn.disabled = true;
+                target.innerHTML = '';
+                csvRows = [];
+
+                if (!file) { setStatus(''); return; }
+
+                sourceName = file.name.replace(/\.[^.]+$/, '') || 'taxa';
+                try {
+                    const text = await file.text();
+                    csvRows = TD.parseCsv(text, TD.detectDelimiter(text));
+                } catch (err) {
+                    console.error(err);
+                    setStatus('Could not read the file: ' + (err && err.message ? err.message : err), true);
+                    return;
+                }
+
+                if (csvRows.length < 2) {
+                    setStatus('The file needs a header row and at least one data row.', true);
+                    return;
+                }
+
+                csvRows[0].forEach((header, i) => {
+                    const option = document.createElement('option');
+                    option.value = String(i);
+                    option.textContent = columnLabel(header, i);
+                    columnSelect.appendChild(option);
+                });
+                const guess = csvRows[0].findIndex((h) =>
+                    /tax|species|scientific|latin|name/i.test(String(h)));
+                if (guess >= 0) columnSelect.value = String(guess);
+
+                columnSelect.disabled = false;
+                generateBtn.disabled = false;
+                setStatus((csvRows.length - 1) + ' data rows, ' + csvRows[0].length +
+                    ' columns. Choose the column with taxa.');
+            });
+
+            function renderTable(values) {
+                target.innerHTML = '';
+                const table = document.createElement('table');
+
+                const thead = document.createElement('thead');
+                const headRow = document.createElement('tr');
+                TD.COLUMNS.forEach((c) => {
+                    const th = document.createElement('th');
+                    th.textContent = c.label;
+                    headRow.appendChild(th);
+                });
+                thead.appendChild(headRow);
+                table.appendChild(thead);
+
+                const tbody = document.createElement('tbody');
+                const cells = values.map((value) => {
+                    const tr = document.createElement('tr');
+                    const rowCells = TD.COLUMNS.map((c) => {
+                        const td = document.createElement('td');
+                        if (c.key === 'input') td.textContent = value;
+                        else { td.textContent = '\u2026'; td.className = 'pending'; }
+                        tr.appendChild(td);
+                        return td;
+                    });
+                    tbody.appendChild(tr);
+                    return rowCells;
+                });
+                table.appendChild(tbody);
+                target.appendChild(table);
+                return cells;
+            }
+
+            function fillRow(cells, row) {
+                TD.COLUMNS.forEach((c, i) => {
+                    const td = cells[i];
+                    const value = row[c.key];
+                    td.className = c.key === 'note' && value ? 'note' : '';
+                    if (c.key === 'id' && value) {
+                        td.innerHTML = '';
+                        const link = document.createElement('a');
+                        link.href = 'https://www.inaturalist.org/taxa/' + value;
+                        link.target = '_blank';
+                        link.rel = 'noopener';
+                        link.textContent = value;
+                        td.appendChild(link);
+                    } else {
+                        td.textContent = value === 0 ? '0' : (value || '');
+                    }
+                });
+            }
+
+            form.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                if (!csvRows.length) { setStatus('Choose a CSV file first.', true); return; }
+
+                const index = Number(columnSelect.value);
+                const values = csvRows.slice(1)
+                    .map((r) => String(r[index] || '').trim())
+                    .filter((v) => v !== '');
+
+                if (!values.length) {
+                    setStatus('Column "' + columnLabel(csvRows[0][index], index) + '" is empty.', true);
+                    return;
+                }
+
+                generateBtn.disabled = true;
+                downloadBtn.disabled = true;
+                resultRows = [];
+                const cells = renderTable(values);
+
+                try {
+                    const resolved = await TD.resolve(values, setStatus);
+
+                    let found = 0;
+                    values.forEach((value, i) => {
+                        const hit = resolved.get(value) || { id: null, fuzzy: false };
+                        const row = TD.rowForTaxon(value, hit.id,
+                            hit.id && hit.fuzzy ? 'closest match, not an exact name' : '');
+                        if (row.id) found++;
+                        resultRows.push(row);
+                        fillRow(cells[i], row);
+                    });
+
+                    downloadBtn.disabled = false;
+                    setStatus(found + ' of ' + values.length + ' taxa resolved.');
+                } catch (err) {
+                    console.error(err);
+                    setStatus('Failed: ' + (err && err.message ? err.message : err), true);
+                } finally {
+                    generateBtn.disabled = false;
+                }
+            });
+
+            downloadBtn.addEventListener('click', function () {
+                if (!resultRows.length) return;
+
+                const rows = [TD.COLUMNS.map((c) => c.label)];
+                resultRows.forEach((row) => rows.push(TD.COLUMNS.map((c) => row[c.key])));
+
+                // The BOM keeps Cyrillic readable when the file is opened in Excel.
+                const blob = new Blob(['\uFEFF' + TD.toCsv(rows)], { type: 'text/csv;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = sourceName + '_tax_details.csv';
+                link.click();
+                URL.revokeObjectURL(url);
+            });
+        })();
+    </script>
+</body>
+</html>
