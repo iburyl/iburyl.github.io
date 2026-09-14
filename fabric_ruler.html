@@ -548,6 +548,26 @@
                         </div>
                     </div>
                 </details>
+
+                <details class="ruler-section" id="dpi-section">
+                    <summary>DPI ruler</summary>
+                    <div class="ruler-body">
+                        <button type="button" id="dpi-measure">Measure</button>
+                        <p class="muted" id="dpi-status">
+                            Enter the image DPI, then measure the object.
+                        </p>
+                        <div class="ruler-phys" style="border-top:none; margin-top:0.6rem; padding-top:0;">
+                            <label class="phys-in">
+                                <span>image DPI</span>
+                                <input type="text" id="dpi-input" placeholder="600">
+                            </label>
+                            <label class="phys-out">
+                                <span>object size (mm)</span>
+                                <input type="text" id="dpi-output" readonly placeholder="&#8212;">
+                            </label>
+                        </div>
+                    </div>
+                </details>
             </aside>
         </div>
     </div>
@@ -623,7 +643,7 @@
                 view.scale = 1; view.tx = 0; view.ty = 0;
                 setRotation(0);
             }
-            function clampScale(s) { return Math.min(10, Math.max(1, s)); }
+            function clampScale(s) { return Math.min(40, Math.max(1, s)); }
             function zoomBy(factor) {
                 view.scale = clampScale(view.scale * factor);
                 if (view.scale === 1) { view.tx = 0; view.ty = 0; }
@@ -840,22 +860,29 @@
                 var physInLabel = document.getElementById("phys-in-label");
                 var physOutLabel = document.getElementById("phys-out-label");
 
-                // Reference ruler: mark a line of known size, then measure an object.
+                // Physical rulers: reference calibration or known image DPI.
                 var rulerSection = document.getElementById("ruler-section");
                 var refSection = document.getElementById("reference-section");
+                var dpiSection = document.getElementById("dpi-section");
                 var refMarkBtn = document.getElementById("ref-mark");
                 var refMeasBtn = document.getElementById("ref-measure");
                 var refStatus = document.getElementById("ref-status");
                 var refInput = document.getElementById("ref-input");
                 var refOutput = document.getElementById("ref-output");
+                var dpiMeasBtn = document.getElementById("dpi-measure");
+                var dpiStatus = document.getElementById("dpi-status");
+                var dpiInput = document.getElementById("dpi-input");
+                var dpiOutput = document.getElementById("dpi-output");
 
-                var panel = "ruler";        // "ruler" | "reference"
+                var panel = "ruler";        // "ruler" | "reference" | "dpi"
                 var refLine = null;         // {x0,y0,x1,y1} reference, source px
                 var refLen = 0;             // reference length in source px
-                var objLine = null;         // {x0,y0,x1,y1} object, source px
-                var objLen = 0;             // object length in source px
+                var objLine = null;         // reference-ruler object line, source px
+                var objLen = 0;             // reference-ruler object length, source px
+                var dpiLine = null;         // DPI-ruler object line, source px
+                var dpiLen = 0;             // DPI-ruler object length, source px
 
-                var captureMode = null;     // null | "rect" | "line" | "refmark" | "refobj"
+                var captureMode = null;     // null | "rect" | "line" | "refmark" | "refobj" | "dpiobj"
                 var dragging = false;
                 var startPt = null, curPt = null;   // square-relative pixels
                 var srcRect = null;         // {x, y, w, h} in source image pixels
@@ -1122,15 +1149,52 @@
                     ctx.lineTo(curPt.x, curPt.y);
                     ctx.stroke();
                 }
+
+                // DPI ruler: a single measured object line; physical scale comes from
+                // the user-provided image DPI rather than an in-image reference.
+                function drawDpi() {
+                    sizeOverlay();
+                    clearCanvas();
+                    var f = fit();
+                    if (!f || !dpiLine) return;
+                    var a = sourceToScreen(dpiLine.x0, dpiLine.y0, f);
+                    var b = sourceToScreen(dpiLine.x1, dpiLine.y1, f);
+                    ctx.strokeStyle = "#1e90ff";
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(a.x, a.y);
+                    ctx.lineTo(b.x, b.y);
+                    ctx.stroke();
+                    ctx.fillStyle = "#1e90ff";
+                    [a, b].forEach(function (p) {
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, 3, 0, 2 * Math.PI);
+                        ctx.fill();
+                    });
+                }
+                function drawLiveDpiLine() {
+                    sizeOverlay();
+                    clearCanvas();
+                    if (dpiLine) drawDpi();
+                    if (!startPt || !curPt) return;
+                    ctx.strokeStyle = "#1e90ff";
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(startPt.x, startPt.y);
+                    ctx.lineTo(curPt.x, curPt.y);
+                    ctx.stroke();
+                }
                 // Redraw whichever panel is active (keeps overlays in sync on
                 // zoom/pan/rotate/resize without mixing the two tools).
                 function redrawActive() {
                     if (panel === "reference") drawReference();
+                    else if (panel === "dpi") drawDpi();
                     else drawResult();
                 }
 
                 rulerRedraw = function () {
                     if (panel === "reference") { if (refLine || objLine) drawReference(); }
+                    else if (panel === "dpi") { if (dpiLine) drawDpi(); }
                     else if (srcRect || measureLine) { drawResult(); }
                 };
 
@@ -1305,6 +1369,8 @@
                     refMarkBtn.textContent = "Mark reference";
                     refMeasBtn.classList.remove("active");
                     refMeasBtn.textContent = "Measure";
+                    dpiMeasBtn.classList.remove("active");
+                    dpiMeasBtn.textContent = "Measure";
                     overlay.classList.remove("selecting");
                 }
 
@@ -1391,6 +1457,7 @@
                 function drawLive() {
                     if (captureMode === "rect") drawLiveRect();
                     else if (captureMode === "line") drawLiveLine();
+                    else if (captureMode === "dpiobj") drawLiveDpiLine();
                     else drawLiveRefLine();
                 }
                 overlay.addEventListener("pointerdown", function (e) {
@@ -1413,6 +1480,7 @@
                     else if (captureMode === "line") finishMeasure();
                     else if (captureMode === "refmark") finishRefLine("mark");
                     else if (captureMode === "refobj") finishRefLine("obj");
+                    else if (captureMode === "dpiobj") finishDpiLine();
                 });
 
                 calBtn.addEventListener("click", function () {
@@ -1490,8 +1558,52 @@
                     beginRefLine("obj");
                 });
 
-                // The two ruler sections behave as an accordion: opening one closes
-                // the other, cancels any capture, and clears the image overlays so the
+
+                // --- DPI ruler: known image DPI -> physical length -----------------
+                function beginDpiLine() {
+                    if (obsSquare.classList.contains("empty")) return;
+                    captureMode = "dpiobj";
+                    startPt = curPt = null;
+                    dpiMeasBtn.classList.add("active");
+                    dpiMeasBtn.textContent = "Cancel";
+                    overlay.classList.add("selecting");
+                    dpiStatus.textContent = "Drag across the object.";
+                }
+                function finishDpiLine() {
+                    var f = fit();
+                    if (!f || !startPt || !curPt) { endCapture(); return; }
+                    var a = screenToSource(startPt.x, startPt.y, f);
+                    var b = screenToSource(curPt.x, curPt.y, f);
+                    endCapture();
+                    var len = Math.hypot(b.x - a.x, b.y - a.y);
+                    if (len < 4) { dpiStatus.textContent = "Line too short; try again."; return; }
+                    dpiLine = { x0: a.x, y0: a.y, x1: b.x, y1: b.y };
+                    dpiLen = len;
+                    drawDpi();
+                    updateDpiOutput();
+                    dpiStatus.textContent = "Object measured (" + len.toFixed(0) + " px).";
+                }
+                function updateDpiOutput() {
+                    var dpi = parseFloat(dpiInput.value);
+                    if (!dpiLen || !isFinite(dpi) || dpi <= 0) {
+                        dpiOutput.value = "";
+                        return;
+                    }
+                    dpiOutput.value = (dpiLen * 25.4 / dpi).toFixed(2);
+                }
+                dpiInput.addEventListener("input", updateDpiOutput);
+                dpiMeasBtn.addEventListener("click", function () {
+                    if (captureMode === "dpiobj") {
+                        endCapture();
+                        dpiStatus.textContent = "Cancelled.";
+                        return;
+                    }
+                    if (captureMode) endCapture();
+                    beginDpiLine();
+                });
+
+                // The ruler sections behave as an accordion: opening one closes
+                // the others, cancels any capture, and clears the image overlays so the
                 // tools never share the canvas.
                 var switching = false;
                 function activatePanel(name) {
@@ -1499,9 +1611,11 @@
                     panel = name;
                     rulerSection.open = (name === "ruler");
                     refSection.open = (name === "reference");
+                    dpiSection.open = (name === "dpi");
                     switching = false;
                     endCapture();
                     if (name === "reference") drawReference();
+                    else if (name === "dpi") drawDpi();
                     else drawResult();
                 }
                 rulerSection.addEventListener("toggle", function () {
@@ -1512,6 +1626,12 @@
                 refSection.addEventListener("toggle", function () {
                     if (switching) return;
                     if (refSection.open) activatePanel("reference");
+                    else { endCapture(); clearCanvas(); }
+                });
+
+                dpiSection.addEventListener("toggle", function () {
+                    if (switching) return;
+                    if (dpiSection.open) activatePanel("dpi");
                     else { endCapture(); clearCanvas(); }
                 });
 
@@ -1611,6 +1731,10 @@
                     refInput.value = ""; refOutput.value = "";
                     refStatus.textContent =
                         "Mark a reference of known size, then measure the object.";
+                    dpiLine = null; dpiLen = 0;
+                    dpiInput.value = ""; dpiOutput.value = "";
+                    dpiStatus.textContent =
+                        "Enter the image DPI, then measure the object.";
                     clearCanvas();
                     resultsEl.innerHTML = "";
                     statusEl2.textContent = "Click Calibrate, then drag over the fabric.";
